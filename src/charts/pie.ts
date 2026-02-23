@@ -1,5 +1,5 @@
 import { Chart, ArcElement, Tooltip, Legend, PieController, DoughnutController } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
 
 Chart.register(ArcElement, Tooltip, Legend, PieController, DoughnutController);
 
@@ -57,6 +57,13 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
       responsive: true,
       maintainAspectRatio: false,
       cutout: isDonut ? "55%" : 0,
+      onClick: (_event, elements) => {
+        if (elements.length === 0) return;
+        const idx = elements[0].index;
+        const item = data[idx];
+        const pct = ((item.value / total) * 100).toFixed(1);
+        sendClickMessage(`I clicked "${item.label}" in the "${title}" chart (value: ${item.value.toLocaleString()}, ${pct}% of total). Tell me more about this.`);
+      },
       plugins: {
         legend: {
           display: showLegend,
@@ -86,4 +93,5 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
   });
 
   addExportButton(container, chartInstance, title);
+  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

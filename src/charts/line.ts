@@ -9,7 +9,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
 
 Chart.register(
   LineController,
@@ -97,6 +97,13 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
         mode: "index",
         intersect: false,
       },
+      onClick: (_event, elements) => {
+        if (elements.length === 0) return;
+        const idx = elements[0].index;
+        const label = labels[idx];
+        const values = datasets.map((ds) => `${ds.label}: ${ds.data[idx]?.toLocaleString()}`).join(", ");
+        sendClickMessage(`I clicked data point "${label}" in the "${title}" chart (${values}). Analyze this point.`);
+      },
       scales: {
         x: {
           border: { display: false },
@@ -134,4 +141,5 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
   });
 
   addExportButton(container, chartInstance, title);
+  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

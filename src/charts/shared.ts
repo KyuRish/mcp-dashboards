@@ -1,3 +1,43 @@
+import type { App } from "@modelcontextprotocol/ext-apps";
+
+// -- App instance for bidirectional communication --
+let _app: App | null = null;
+
+export function setAppInstance(app: App): void {
+  _app = app;
+}
+
+export function getAppInstance(): App | null {
+  return _app;
+}
+
+/** Send a click event as a user message into the chat */
+export async function sendClickMessage(message: string): Promise<void> {
+  if (!_app) return;
+  try {
+    await _app.sendMessage({
+      role: "user",
+      content: [{ type: "text", text: message }],
+    });
+  } catch (e) {
+    console.warn("Failed to send click message:", e);
+  }
+}
+
+// -- Last tool call storage for live refresh --
+let _lastToolName: string | null = null;
+let _lastToolArgs: Record<string, unknown> | null = null;
+
+export function storeLastToolCall(name: string, args: Record<string, unknown>): void {
+  _lastToolName = name;
+  _lastToolArgs = args;
+}
+
+export function getLastToolCall(): { name: string; args: Record<string, unknown> } | null {
+  if (!_lastToolName || !_lastToolArgs) return null;
+  return { name: _lastToolName, args: _lastToolArgs };
+}
+
 export const CHART_COLORS = [
   "#3B82F6", // blue
   "#10B981", // emerald
@@ -59,6 +99,26 @@ export function addExportButton(
     link.download = `${filename}.png`;
     link.href = chart.toBase64Image();
     link.click();
+  });
+  header.appendChild(btn);
+}
+
+/** Add a refresh button to a chart card header */
+export function addRefreshButton(
+  container: HTMLElement,
+  onRefresh: () => void
+): void {
+  const header = container.querySelector(".chart-card__header");
+  if (!header) return;
+
+  const btn = document.createElement("button");
+  btn.className = "export-btn";
+  btn.title = "Refresh data";
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`;
+  btn.addEventListener("click", () => {
+    btn.style.animation = "spin 0.6s linear";
+    btn.addEventListener("animationend", () => { btn.style.animation = ""; }, { once: true });
+    onRefresh();
   });
   header.appendChild(btn);
 }

@@ -72,6 +72,20 @@ const ScatterOptions = z.object({
   colors: ColorsOption,
 }).optional();
 
+const CandlestickPointSchema = z.object({
+  date: z.string().describe("Date string (ISO 8601 or any parseable format)"),
+  o: z.number().describe("Opening price"),
+  h: z.number().describe("High price"),
+  l: z.number().describe("Low price"),
+  c: z.number().describe("Closing price"),
+  v: z.number().optional().describe("Volume (optional)"),
+});
+
+const CandlestickOptions = z.object({
+  type: z.enum(["candlestick", "ohlc"]).optional().describe("Chart style: candlestick (default) or OHLC bars"),
+  showVolume: z.boolean().optional().describe("Show volume bars below chart. Default: false"),
+}).optional();
+
 const KpiSchema = z.object({
   label: z.string().describe("KPI name"),
   value: z.union([z.string(), z.number()]).describe("KPI value"),
@@ -335,6 +349,42 @@ export function createServer(): McpServer {
     }
   );
 
+  // -- Tool: render_candlestick_chart --
+  registerAppTool(
+    server,
+    "render_candlestick_chart",
+    {
+      title: "Candlestick Chart",
+      description:
+        "Render an interactive candlestick or OHLC financial chart. Provide date/OHLC data for stock prices, crypto, forex, or any time-series financial data.",
+      inputSchema: {
+        title: z.string().describe("Chart title"),
+        data: z.array(CandlestickPointSchema).describe("Array of {date, o, h, l, c} OHLC data points"),
+        options: CandlestickOptions,
+      },
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async (args): Promise<CallToolResult> => {
+      const chartData = {
+        type: "candlestick" as const,
+        title: args.title,
+        data: args.data,
+        options: args.options ?? {},
+      };
+      const first = args.data[0];
+      const last = args.data[args.data.length - 1];
+      const change = last ? ((last.c - first.o) / first.o * 100).toFixed(2) : "0";
+
+      return {
+        content: [
+          { type: "text", text: `${args.title}: ${args.data.length} bars, ${first?.date ?? "?"} to ${last?.date ?? "?"}, change: ${change}%` },
+          { type: "text", text: JSON.stringify(chartData) },
+        ],
+        structuredContent: chartData,
+      };
+    }
+  );
+
   // -- Tool: render_table --
   registerAppTool(
     server,
@@ -409,6 +459,62 @@ export function createServer(): McpServer {
         ],
         structuredContent: chartData,
       };
+    }
+  );
+
+  // -- Tool: render_from_url --
+  registerAppTool(
+    server,
+    "render_from_url",
+    {
+      title: "Chart from URL",
+      description:
+        "Fetch JSON data from a URL and automatically visualize it. The server fetches the data, detects the best chart type, and renders it interactively.",
+      inputSchema: {
+        title: z.string().describe("Chart title"),
+        url: z.string().url().describe("URL that returns JSON data"),
+        options: z.object({
+          preferredType: z.enum(["pie", "bar", "line", "scatter", "table"]).optional().describe(
+            "Force a specific chart type instead of auto-detecting"
+          ),
+        }).optional(),
+      },
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async (args): Promise<CallToolResult> => {
+      try {
+        const response = await fetch(args.url, {
+          headers: { "Accept": "application/json", "User-Agent": "MCP-Dashboard/1.0" },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) {
+          return {
+            content: [{ type: "text", text: `Failed to fetch ${args.url}: ${response.status} ${response.statusText}` }],
+            isError: true,
+          };
+        }
+        const data = await response.json();
+
+        const chartData = {
+          type: "auto" as const,
+          title: args.title,
+          data,
+          options: args.options ?? {},
+        };
+
+        return {
+          content: [
+            { type: "text", text: `Fetched and visualizing: ${args.title} (from ${args.url})` },
+            { type: "text", text: JSON.stringify(chartData) },
+          ],
+          structuredContent: chartData,
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: `Error fetching ${args.url}: ${err.message}` }],
+          isError: true,
+        };
+      }
     }
   );
 

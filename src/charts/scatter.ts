@@ -6,7 +6,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
 
 Chart.register(ScatterController, PointElement, LinearScale, Tooltip, Legend);
 
@@ -78,6 +78,13 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
         mode: "nearest",
         intersect: true,
       },
+      onClick: (_event, elements) => {
+        if (elements.length === 0) return;
+        const el = elements[0];
+        const ds = datasets[el.datasetIndex];
+        const point = ds.data[el.index];
+        sendClickMessage(`I clicked point (${point.x}, ${point.y}) in "${ds.label}" series of the "${title}" chart. Analyze this data point.`);
+      },
       scales: {
         x: {
           border: { display: false },
@@ -132,4 +139,5 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
   });
 
   addExportButton(container, chartInstance, title);
+  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

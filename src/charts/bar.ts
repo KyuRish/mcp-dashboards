@@ -7,7 +7,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -68,6 +68,13 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
         mode: "index",
         intersect: false,
       },
+      onClick: (_event, elements) => {
+        if (elements.length === 0) return;
+        const el = elements[0];
+        const label = labels[el.index];
+        const values = datasets.map((ds) => `${ds.label}: ${ds.data[el.index]?.toLocaleString()}`).join(", ");
+        sendClickMessage(`I clicked "${label}" in the "${title}" chart (${values}). Tell me more about this.`);
+      },
       scales: {
         x: {
           stacked: isStacked,
@@ -104,4 +111,5 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
   });
 
   addExportButton(container, chartInstance, title);
+  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

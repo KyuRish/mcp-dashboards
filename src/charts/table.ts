@@ -1,4 +1,4 @@
-import { escapeHtml } from "./shared.js";
+import { escapeHtml, sendClickMessage } from "./shared.js";
 
 export interface TableData {
   title: string;
@@ -107,6 +107,7 @@ function injectStyles(container: HTMLElement): void {
     .tbl td.tbl-str { text-align: left; }
 
     .tbl tbody tr {
+      cursor: pointer;
       transition: background 0.12s ease;
     }
     .tbl tbody tr:hover td {
@@ -192,7 +193,8 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
   if (rows.length === 0) {
     bodyHtml = `<tr><td class="tbl-empty" colspan="${columns.length}">No data</td></tr>`;
   } else {
-    for (const row of rows) {
+    for (let ri = 0; ri < rows.length; ri++) {
+      const row = rows[ri];
       const cells = columns
         .map((col) => {
           const val = row[col];
@@ -201,7 +203,7 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
           return `<td class="${cellClass}">${display}</td>`;
         })
         .join("");
-      bodyHtml += `<tr>${cells}</tr>`;
+      bodyHtml += `<tr data-row-idx="${ri}">${cells}</tr>`;
     }
   }
 
@@ -235,6 +237,18 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
   // Re-inject the style tag (innerHTML wipe removed it)
   injectStyles(container);
 
+  // Row click events for bidirectional messaging
+  const tbody = container.querySelector<HTMLElement>("#tbl-body")!;
+  tbody.addEventListener("click", (e) => {
+    const tr = (e.target as HTMLElement).closest<HTMLElement>("tr[data-row-idx]");
+    if (!tr) return;
+    const idx = parseInt(tr.dataset.rowIdx ?? "0", 10);
+    const row = rows[idx];
+    if (!row) return;
+    const summary = columns.map((col) => `${col}: ${row[col] ?? ""}`).join(", ");
+    sendClickMessage(`I clicked row ${idx + 1} in the "${title}" table: ${summary}. Tell me more about this entry.`);
+  });
+
   if (!sortable || rows.length === 0) return;
 
   // Sorting state
@@ -244,7 +258,6 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
   // Working copy of rows - indices into original rows array
   let sortedIndices: number[] = rows.map((_, i) => i);
 
-  const tbody = container.querySelector<HTMLElement>("#tbl-body")!;
   const headers = container.querySelectorAll<HTMLElement>(".tbl-th.tbl-sortable");
 
   function rebuildBody(): void {
@@ -281,7 +294,7 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
           return `<td class="${cellClass}">${display}</td>`;
         })
         .join("");
-      html += `<tr>${cells}</tr>`;
+      html += `<tr data-row-idx="${idx}">${cells}</tr>`;
     }
     tbody.innerHTML = html;
   }
