@@ -1,0 +1,69 @@
+{
+  "name": "mcp-dashboard",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Turn your data into interactive dashboards inside any AI client",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KyuRish/mcp-dashboard"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "dist/server.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:ui": "cross-env INPUT=mcp-app.html vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build": "npm run build:ui && npm run build:server",
+    "watch:ui": "cross-env INPUT=mcp-app.html vite build --watch",
+    "serve": "node dist/index.js",
+    "start": "npm run build && npm run serve",
+    "dev": "cross-env NODE_ENV=development concurrently \"npm run watch:ui\" \"node --watch dist/index.js\"",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "chart.js": "^4.4.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  },
+  "types": "dist/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "bin": {
+    "mcp-dashboard": "dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "mcp-apps",
+    "dashboard",
+    "data-visualization",
+    "charts",
+    "chart.js",
+    "interactive",
+    "ai",
+    "claude",
+    "model-context-protocol"
+  ]
+}

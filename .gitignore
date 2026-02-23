@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.mcp.json
+*.tsbuildinfo
+.DS_Store
+*.log
+test-preview.html
