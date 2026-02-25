@@ -127,6 +127,7 @@ body {
   grid-template-rows: auto 1fr;
   gap: var(--gap);
   padding: var(--gap);
+  padding-bottom: 4px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -305,6 +306,15 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 240px;
+}
+
+/* Tighter layout inside dashboards with many charts */
+.dashboard .chart-card {
+  min-height: 200px;
+}
+
+.dashboard .chart-card__body {
+  min-height: 160px;
 }
 
 .chart-card__header {
