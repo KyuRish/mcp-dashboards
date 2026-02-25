@@ -341,28 +341,33 @@ function renderRaw(container: HTMLElement, title: string, data: any): void {
 
 // -- Main export --
 
+function hasNestedObjects(data: any): boolean {
+  if (Array.isArray(data)) {
+    // Check if any item in the array has nested object values
+    const sample = data.find((item) => typeof item === "object" && item !== null && !Array.isArray(item));
+    if (!sample) return false;
+    return Object.values(sample).some((v) => typeof v === "object" && v !== null && !Array.isArray(v));
+  }
+  if (typeof data === "object" && data !== null) {
+    return Object.values(data).some((v) => typeof v === "object" && v !== null && !Array.isArray(v));
+  }
+  return false;
+}
+
 export function renderAutoChart(container: HTMLElement, payload: AutoChartData): void {
   const { title, options } = payload;
   let { data } = payload;
   const preferred = options?.preferredType;
 
-  // Attempt to flatten nested objects before analysis
-  const isNested =
-    !Array.isArray(data) &&
-    typeof data === "object" &&
-    data !== null &&
-    Object.values(data).some(
-      (v) => typeof v === "object" && v !== null && !Array.isArray(v)
-    );
-
+  // Always flatten nested objects/arrays before analysis
+  // This handles cases like {name: {common: "Vietnam"}} -> {"name.common": "Vietnam"}
   let resolvedData = data;
-  if (isNested) {
+  if (hasNestedObjects(data)) {
     resolvedData = tryFlatten(data);
-    // Re-check: if flattened result is still complex, wrap into array for re-analysis
-    if (!Array.isArray(resolvedData)) {
+    // For non-arrays: if flattened result still has nested objects, convert to row array
+    if (!Array.isArray(resolvedData) && typeof resolvedData === "object" && resolvedData !== null) {
       const flatVals = Object.values(resolvedData as object);
       if (flatVals.some((v) => typeof v === "object" && v !== null)) {
-        // Deep nesting - convert to row array
         resolvedData = Object.entries(resolvedData as object).map(([k, v]) => ({
           key: k,
           value: typeof v === "object" ? JSON.stringify(v) : v,

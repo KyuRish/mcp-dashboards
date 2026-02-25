@@ -7,7 +7,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -110,6 +110,7 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
     },
   });
 
+  deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

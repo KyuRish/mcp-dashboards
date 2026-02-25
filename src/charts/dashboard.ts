@@ -14,7 +14,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { CHART_COLORS, getCSSVar, tooltipStyle, escapeHtml } from "./shared.js";
+import { CHART_COLORS, getCSSVar, tooltipStyle, escapeHtml, deferResize } from "./shared.js";
 
 Chart.register(
   ArcElement,
@@ -149,7 +149,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
     const colors = data.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]);
     const isDonut = (chart.options?.donut as boolean) === true;
 
-    new Chart(canvas, {
+    const pieChart = new Chart(canvas, {
       type: isDonut ? "doughnut" : "pie",
       data: {
         labels: data.map((d) => d.label),
@@ -182,6 +182,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
         },
       },
     });
+    deferResize(pieChart);
     return;
   }
 
@@ -191,7 +192,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
     const isStacked = (chart.options?.stacked as boolean) === true;
     const isHorizontal = (chart.options?.horizontal as boolean) === true;
 
-    new Chart(canvas, {
+    const barChart = new Chart(canvas, {
       type: "bar",
       data: {
         labels,
@@ -219,6 +220,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
         },
       },
     });
+    deferResize(barChart);
     return;
   }
 
@@ -228,7 +230,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
     const shouldFill = (chart.options?.fill as boolean) !== false;
     const isSmooth = (chart.options?.smooth as boolean) !== false;
 
-    new Chart(canvas, {
+    const lineChart = new Chart(canvas, {
       type: "line",
       data: {
         labels,
@@ -270,5 +272,6 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
         },
       },
     });
+    deferResize(lineChart);
   }
 }

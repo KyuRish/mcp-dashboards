@@ -1,5 +1,5 @@
 import { Chart, ArcElement, Tooltip, Legend, PieController, DoughnutController } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
 
 Chart.register(ArcElement, Tooltip, Legend, PieController, DoughnutController);
 
@@ -92,6 +92,7 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
     },
   });
 
+  deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

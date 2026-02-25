@@ -6,7 +6,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
 
 Chart.register(ScatterController, PointElement, LinearScale, Tooltip, Legend);
 
@@ -50,6 +50,17 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
   const palette = resolveColors(options.colors);
   const showLine = options.showLine === true;
 
+  // Compute explicit axis ranges so Chart.js doesn't default to including 0
+  const allPoints = datasets.flatMap((ds) => ds.data);
+  const allX = allPoints.map((p) => p.x);
+  const allY = allPoints.map((p) => p.y);
+  const xMin = Math.min(...allX);
+  const xMax = Math.max(...allX);
+  const yMin = Math.min(...allY);
+  const yMax = Math.max(...allY);
+  const xPad = (xMax - xMin) * 0.1 || 1;
+  const yPad = (yMax - yMin) * 0.15 || 1;
+
   const chartInstance = new Chart(canvas, {
     type: "scatter",
     data: {
@@ -87,6 +98,9 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
       },
       scales: {
         x: {
+          type: "linear",
+          min: xMin - xPad,
+          max: xMax + xPad,
           border: { display: false },
           grid: { color: getCSSVar("--border") },
           ticks: { color: getCSSVar("--text-secondary"), font: { size: 11 } },
@@ -98,6 +112,9 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
           },
         },
         y: {
+          type: "linear",
+          min: yMin - yPad,
+          max: yMax + yPad,
           border: { display: false },
           grid: { color: getCSSVar("--border"), drawTicks: false },
           ticks: {
@@ -138,6 +155,7 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
     },
   });
 
+  deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

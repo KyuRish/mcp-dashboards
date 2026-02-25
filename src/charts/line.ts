@@ -9,7 +9,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
 
 Chart.register(
   LineController,
@@ -140,6 +140,7 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
     },
   });
 
+  deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }

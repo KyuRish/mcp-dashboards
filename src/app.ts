@@ -21,6 +21,8 @@ root.innerHTML = `
 `;
 
 // Connect to host via MCP Apps protocol
+// autoResize: true (default) - SDK watches document.body via ResizeObserver
+// and sends ui/notifications/size-changed to the host automatically.
 const app = new App({ name: "MCP Dashboard", version: "1.0.0" });
 
 // Make app accessible to chart renderers for bidirectional messaging
@@ -125,4 +127,7 @@ app.ontoolresult = (result) => {
   }
 };
 
-app.connect();
+app.connect().catch((err) => {
+  console.error("Failed to connect to host:", err);
+  root.innerHTML = `<div class="loading">Connection failed. Please retry.</div>`;
+});

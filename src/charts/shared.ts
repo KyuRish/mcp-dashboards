@@ -81,6 +81,16 @@ export function resolveColors(custom?: string[], count?: number): string[] {
   return CHART_COLORS;
 }
 
+/** Nudge Chart.js to recalculate at key intervals after creation.
+ *  The SDK's autoResize handles host communication; Chart.js has its own
+ *  internal ResizeObserver. These timed nudges cover edge cases where the
+ *  iframe grows between Chart.js observer ticks. */
+export function deferResize(chart: { resize: () => void }): void {
+  for (const ms of [300, 600, 1500, 3000]) {
+    setTimeout(() => { try { chart.resize(); } catch {} }, ms);
+  }
+}
+
 /** Add a PNG export button to a chart card header */
 export function addExportButton(
   container: HTMLElement,

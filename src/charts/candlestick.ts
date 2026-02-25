@@ -7,7 +7,7 @@ import {
 } from "chart.js";
 import "chartjs-adapter-luxon";
 import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from "chartjs-chart-financial";
-import { getCSSVar, tooltipStyle, escapeHtml, addExportButton, addRefreshButton, sendClickMessage } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
 
 Chart.register(
   LinearScale,
@@ -72,6 +72,13 @@ export function renderCandlestickChart(container: HTMLElement, payload: Candlest
     c: d.c,
   }));
 
+  // Compute Y-axis range from data to avoid the axis starting at 0
+  // (which would compress candles into flat lines)
+  const allPrices = data.flatMap((d) => [d.o, d.h, d.l, d.c]);
+  const yMin = Math.min(...allPrices);
+  const yMax = Math.max(...allPrices);
+  const yPadding = (yMax - yMin) * 0.15 || 1;
+
   const datasets: any[] = [
     {
       label: title,
@@ -122,6 +129,10 @@ export function renderCandlestickChart(container: HTMLElement, payload: Candlest
           },
         },
         y: {
+          type: "linear",
+          beginAtZero: false,
+          min: yMin - yPadding,
+          max: yMax + yPadding,
           border: { display: false },
           grid: {
             color: getCSSVar("--border"),
@@ -163,6 +174,7 @@ export function renderCandlestickChart(container: HTMLElement, payload: Candlest
     },
   } as any);
 
+  deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
