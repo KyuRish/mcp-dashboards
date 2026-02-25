@@ -1,11 +1,11 @@
 {
-  "name": "mcp-dashboard",
+  "name": "mcp-dashboards",
   "version": "1.0.0",
   "type": "module",
   "description": "Turn your data into interactive dashboards inside any AI client",
   "repository": {
     "type": "git",
-    "url": "https://github.com/KyuRish/mcp-dashboard"
+    "url": "https://github.com/KyuRish/mcp-dashboards"
   },
   "author": "Rishabh Dogra <contact@kyuish.com>",
   "license": "MIT",
