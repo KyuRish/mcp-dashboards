@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage } from "./shared.js";
+import { escapeHtml, sendClickMessage, addCsvExportButton } from "./shared.js";
 
 export interface TableData {
   title: string;
@@ -237,6 +237,10 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
   // Re-inject the style tag (innerHTML wipe removed it)
   injectStyles(container);
 
+  // CSV export button
+  const card = container.querySelector<HTMLElement>(".chart-card");
+  if (card) addCsvExportButton(card, columns, rows, title);
+
   // Row click events for bidirectional messaging
   const tbody = container.querySelector<HTMLElement>("#tbl-body")!;
   tbody.addEventListener("click", (e) => {
@@ -246,7 +250,7 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
     const row = rows[idx];
     if (!row) return;
     const summary = columns.map((col) => `${col}: ${row[col] ?? ""}`).join(", ");
-    sendClickMessage(`I clicked row ${idx + 1} in the "${title}" table: ${summary}. Tell me more about this entry.`);
+    sendClickMessage(`Row ${idx + 1} in "${title}": ${summary}`);
   });
 
   if (!sortable || rows.length === 0) return;

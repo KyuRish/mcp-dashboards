@@ -107,7 +107,7 @@ export function renderCandlestickChart(container: HTMLElement, payload: Candlest
         const idx = elements[0].index;
         const d = data[idx];
         sendClickMessage(
-          `I clicked the ${d.date} candle in "${title}" (Open: ${d.o}, High: ${d.h}, Low: ${d.l}, Close: ${d.c}${d.v !== undefined ? `, Volume: ${d.v.toLocaleString()}` : ""}). Analyze this price action.`
+          `${d.date}: O${d.o} H${d.h} L${d.l} C${d.c}${d.v !== undefined ? ` Vol:${d.v.toLocaleString()}` : ""} in "${title}"`
         );
       },
       scales: {

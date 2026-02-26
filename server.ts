@@ -9,6 +9,7 @@ import type {
   ReadResourceResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -39,7 +40,7 @@ const PieOptions = z.object({
 
 const DatasetSchema = z.object({
   label: z.string().describe("Name of this data series"),
-  data: z.array(z.number()).describe("Array of numeric values"),
+  data: z.array(z.number().nullable()).describe("Array of numeric values (null for gaps in the series)"),
 });
 
 const BarOptions = z.object({
@@ -189,7 +190,7 @@ export function createServer(): McpServer {
     async (args: {
       title: string;
       labels: string[];
-      datasets: Array<{ label: string; data: number[] }>;
+      datasets: Array<{ label: string; data: (number | null)[] }>;
       options?: { horizontal?: boolean; stacked?: boolean; colors?: string[] };
     }): Promise<CallToolResult> => {
       const chartData = {
@@ -232,7 +233,7 @@ export function createServer(): McpServer {
     async (args: {
       title: string;
       labels: string[];
-      datasets: Array<{ label: string; data: number[] }>;
+      datasets: Array<{ label: string; data: (number | null)[] }>;
       options?: { fill?: boolean; smooth?: boolean; showPoints?: boolean; colors?: string[] };
     }): Promise<CallToolResult> => {
       const chartData = {
@@ -285,7 +286,7 @@ export function createServer(): McpServer {
         title?: string;
         data?: unknown;
         labels?: string[];
-        datasets?: Array<{ label: string; data: number[] }>;
+        datasets?: Array<{ label: string; data: (number | null)[] }>;
         options?: unknown;
       }>;
     }): Promise<CallToolResult> => {
@@ -512,6 +513,42 @@ export function createServer(): McpServer {
       } catch (err: any) {
         return {
           content: [{ type: "text", text: `Error fetching ${args.url}: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // -- Tool: save_file (app-only, invisible to AI model) --
+  // Used by the UI to save exports since iframe sandbox blocks direct downloads.
+  server.tool(
+    "save_file",
+    "Save a file to the user's Downloads folder. Used internally by the dashboard UI for PNG/CSV export.",
+    {
+      filename: z.string().describe("Filename with extension (e.g. chart.png)"),
+      data: z.string().describe("File contents: base64-encoded binary or plain text"),
+      encoding: z.enum(["base64", "utf-8"]).describe("How data is encoded"),
+    },
+    async (args) => {
+      try {
+        const sanitized = path.basename(args.filename);
+        const downloadsDir = path.join(os.homedir(), "Downloads");
+        // Ensure Downloads folder exists
+        await fs.mkdir(downloadsDir, { recursive: true });
+        const filePath = path.join(downloadsDir, sanitized);
+
+        if (args.encoding === "base64") {
+          await fs.writeFile(filePath, Buffer.from(args.data, "base64"));
+        } else {
+          await fs.writeFile(filePath, args.data, "utf-8");
+        }
+
+        return {
+          content: [{ type: "text", text: `Saved to ${filePath}` }],
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: `Failed to save: ${err.message}` }],
           isError: true,
         };
       }

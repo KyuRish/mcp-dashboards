@@ -21,16 +21,38 @@ root.innerHTML = `
 `;
 
 // Connect to host via MCP Apps protocol
-// autoResize: true (default) - SDK watches document.body via ResizeObserver
-// and sends ui/notifications/size-changed to the host automatically.
-const app = new App({ name: "MCP Dashboard", version: "1.0.0" });
+// autoResize disabled - we manually report size after each render to avoid
+// the fit-content measurement bug with CSS Grid + absolute canvases.
+const app = new App(
+  { name: "MCP Dashboard", version: "1.0.0" },
+  {},
+  { autoResize: false },
+);
 
 // Make app accessible to chart renderers for bidirectional messaging
 setAppInstance(app);
 
+// Measure actual content height and report to host.
+// Runs multiple times to catch Chart.js async layout settling.
+function reportSize(): void {
+  const send = () => {
+    const rect = root.getBoundingClientRect();
+    app.sendSizeChanged({
+      width: Math.ceil(rect.width),
+      height: Math.ceil(rect.height),
+    });
+  };
+  // Immediate + delayed passes for Chart.js render settling
+  requestAnimationFrame(send);
+  setTimeout(send, 200);
+  setTimeout(send, 600);
+  setTimeout(send, 1500);
+}
+
 function renderFromData(data: any): void {
   if (!data?.type) {
     root.innerHTML = `<div class="loading">No chart data received.</div>`;
+    reportSize();
     return;
   }
 
@@ -63,19 +85,32 @@ function renderFromData(data: any): void {
       default:
         root.innerHTML = `<div class="loading">Unknown chart type: ${data.type}</div>`;
     }
+    reportSize();
   } catch (err) {
     console.error("Render error:", err);
     root.innerHTML = `<div class="loading">Error rendering chart. Check console.</div>`;
+    reportSize();
   }
 }
 
-// Capture tool input for live refresh
+// Map structuredContent.type to server tool names
+const TYPE_TO_TOOL: Record<string, string> = {
+  pie: "render_pie_chart",
+  bar: "render_bar_chart",
+  line: "render_line_chart",
+  scatter: "render_scatter_chart",
+  candlestick: "render_candlestick_chart",
+  dashboard: "render_dashboard",
+  table: "render_table",
+  auto: "render_from_json",
+};
+
+// ontoolinput only provides arguments (no tool name per spec).
+// We store the args here and resolve the tool name from the result's type.
+let _pendingArgs: Record<string, unknown> | null = null;
+
 app.ontoolinput = (params) => {
-  const toolName = (params as any).name;
-  const toolArgs = (params as any).arguments;
-  if (toolName && toolArgs) {
-    storeLastToolCall(toolName, toolArgs);
-  }
+  _pendingArgs = (params as any).arguments ?? null;
 };
 
 app.ontoolresult = (result) => {
@@ -92,6 +127,15 @@ app.ontoolresult = (result) => {
       } catch { /* not JSON, skip */ }
     }
   }
+
+  // Store for refresh: resolve tool name from content type + pending args
+  if (data?.type && _pendingArgs) {
+    const toolName = TYPE_TO_TOOL[data.type];
+    if (toolName) {
+      storeLastToolCall(toolName, _pendingArgs);
+    }
+  }
+  _pendingArgs = null;
 
   renderFromData(data);
 };

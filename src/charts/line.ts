@@ -102,7 +102,7 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
         const idx = elements[0].index;
         const label = labels[idx];
         const values = datasets.map((ds) => `${ds.label}: ${ds.data[idx]?.toLocaleString()}`).join(", ");
-        sendClickMessage(`I clicked data point "${label}" in the "${title}" chart (${values}). Analyze this point.`);
+        sendClickMessage(`${label} (${values}) in "${title}"`);
       },
       scales: {
         x: {

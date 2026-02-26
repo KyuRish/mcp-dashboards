@@ -94,7 +94,7 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
         const el = elements[0];
         const ds = datasets[el.datasetIndex];
         const point = ds.data[el.index];
-        sendClickMessage(`I clicked point (${point.x}, ${point.y}) in "${ds.label}" series of the "${title}" chart. Analyze this data point.`);
+        sendClickMessage(`${ds.label}: (${point.x}, ${point.y}) in "${title}"`);
       },
       scales: {
         x: {

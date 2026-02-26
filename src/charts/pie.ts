@@ -62,7 +62,7 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
         const idx = elements[0].index;
         const item = data[idx];
         const pct = ((item.value / total) * 100).toFixed(1);
-        sendClickMessage(`I clicked "${item.label}" in the "${title}" chart (value: ${item.value.toLocaleString()}, ${pct}% of total). Tell me more about this.`);
+        sendClickMessage(`${item.label}: ${item.value.toLocaleString()} (${pct}%) in "${title}"`);
       },
       plugins: {
         legend: {

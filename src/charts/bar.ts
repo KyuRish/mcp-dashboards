@@ -73,7 +73,7 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
         const el = elements[0];
         const label = labels[el.index];
         const values = datasets.map((ds) => `${ds.label}: ${ds.data[el.index]?.toLocaleString()}`).join(", ");
-        sendClickMessage(`I clicked "${label}" in the "${title}" chart (${values}). Tell me more about this.`);
+        sendClickMessage(`${label} (${values}) in "${title}"`);
       },
       scales: {
         x: {
