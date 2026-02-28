@@ -14,8 +14,10 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import html2canvas from "html2canvas";
-import { CHART_COLORS, getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, saveCanvasViaServer } from "./shared.js";
+import html2canvas from "html2canvas-pro";
+import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast } from "./shared.js";
+import { resolveTheme, applyTheme } from "../themes.js";
+import { renderHeroRing, renderHeroWidget } from "./hero.js";
 
 Chart.register(
   ArcElement,
@@ -42,53 +44,182 @@ interface KPI {
 }
 
 interface DashboardChart {
-  type: "pie" | "bar" | "line";
+  type: string;
   title?: string;
-  data?: Array<{ label: string; value: number }>;
+  data?: Array<{ label: string; value: number }> | Record<string, unknown>;
   labels?: string[];
   datasets?: Array<{ label: string; data: (number | null)[] }>;
   options?: Record<string, unknown>;
+  span?: number;
+  [key: string]: unknown;
+}
+
+interface HeroData {
+  variant?: string;
+  value?: string | number;
+  unit?: string;
+  label?: string;
+  progress?: number;
+  color?: string;
+  size?: "sm" | "md" | "lg" | "xl";
+  [key: string]: unknown;
+}
+
+interface FooterData {
+  text?: string;
+  lastUpdated?: string;
 }
 
 interface DashboardData {
   title: string;
   kpis: KPI[];
   charts: DashboardChart[];
+  columns?: number;
+  theme?: string;
+  palette?: string;
+  typography?: string;
+  effects?: string;
+  hero?: HeroData | HeroData[];
+  footer?: FooterData;
+  layout?: "default" | "hero-center" | "kpi-top";
+}
+
+// ── Color helpers for screenshot fallbacks (color-mix → rgba) ──
+
+function _parseColor(c: string): [number, number, number] {
+  c = c.trim();
+  if (c.startsWith("#")) {
+    let h = c.slice(1);
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    return [parseInt(h.slice(0,2), 16), parseInt(h.slice(2,4), 16), parseInt(h.slice(4,6), 16)];
+  }
+  const rgb = c.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+  if (rgb) return [Math.round(+rgb[1]), Math.round(+rgb[2]), Math.round(+rgb[3])];
+  const srgb = c.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
+  if (srgb) return [Math.round(+srgb[1]*255), Math.round(+srgb[2]*255), Math.round(+srgb[3]*255)];
+  return [99, 102, 241];
+}
+
+function _rgba(color: string, pct: number): string {
+  const [r, g, b] = _parseColor(color);
+  return `rgba(${r},${g},${b},${pct / 100})`;
+}
+
+function _mixBlack(color: string, pct: number): string {
+  const [r, g, b] = _parseColor(color);
+  const f = pct / 100;
+  return `rgb(${Math.round(r*f)},${Math.round(g*f)},${Math.round(b*f)})`;
+}
+
+function _mixTwo(a: string, pctA: number, b: string): string {
+  const [r1, g1, b1] = _parseColor(a);
+  const [r2, g2, b2] = _parseColor(b);
+  const f = pctA / 100;
+  return `rgb(${Math.round(r1*f + r2*(1-f))},${Math.round(g1*f + g2*(1-f))},${Math.round(b1*f + b2*(1-f))})`;
 }
 
 export function renderDashboard(container: HTMLElement, payload: DashboardData): void {
   const { title, kpis, charts } = payload;
+  const layout = payload.layout || "default";
+
+  // Apply theme if specified
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
+
+  const shimmerClass = theme?.effects.shimmerTitle ? " shimmer-text" : "";
 
   const kpiHtml = kpis.length > 0
     ? `<div class="kpi-row">${kpis.map((k, i) => buildKpiCard(k, i)).join("")}</div>`
     : "";
 
+  // Normalize hero to array
+  const heroes: HeroData[] = payload.hero
+    ? (Array.isArray(payload.hero) ? payload.hero : [payload.hero])
+    : [];
+
+  const heroHtml = heroes.length > 0
+    ? `<div class="dashboard-hero" id="dash-hero"></div>`
+    : "";
+
+  const canvasTypes = new Set(["pie", "bar", "line"]);
+  const heroTypes = new Set(["hero_ring", "hero"]);
+
   const chartsHtml = charts
     .map(
-      (c, i) => `
-      <div class="card chart-card" style="animation-delay: ${(kpis.length + i) * 0.08 + 0.05}s">
-        <div class="chart-card__header">
-          <div>
-            <div class="chart-card__title">${escapeHtml(c.title ?? `Chart ${i + 1}`)}</div>
-          </div>
-        </div>
-        <div class="chart-card__body">
-          <canvas id="dash-chart-${i}"></canvas>
-        </div>
-      </div>
-    `
+      (c, i) => {
+        const delay = `animation-delay: ${(kpis.length + i) * 0.08 + 0.05}s`;
+        const spanStyle = c.span && c.span > 1 ? `grid-column: span ${c.span};` : "";
+        const style = [delay, spanStyle].filter(Boolean).join(";");
+        if (heroTypes.has(c.type)) {
+          return `
+            <div class="card chart-card" style="${style}">
+              <div class="chart-card__header">
+                <div>
+                  <div class="chart-card__title${shimmerClass}">${escapeHtml(c.title ?? `Chart ${i + 1}`)}</div>
+                </div>
+              </div>
+              <div class="chart-card__body chart-card__body--css" style="display:flex;align-items:center;justify-content:center;" id="dash-hero-widget-${i}"></div>
+            </div>
+          `;
+        }
+        if (canvasTypes.has(c.type)) {
+          return `
+            <div class="card chart-card" style="${style}">
+              <div class="chart-card__header">
+                <div>
+                  <div class="chart-card__title${shimmerClass}">${escapeHtml(c.title ?? `Chart ${i + 1}`)}</div>
+                </div>
+              </div>
+              <div class="chart-card__body">
+                <canvas id="dash-chart-${i}"></canvas>
+              </div>
+            </div>
+          `;
+        }
+        // CSS/SVG chart types - render into a div container
+        return `<div id="dash-css-chart-${i}" style="${style}"></div>`;
+      }
     )
     .join("");
+
+  const footerHtml = payload.footer
+    ? `<div class="dashboard-footer">
+        <span class="dashboard-footer__text">${escapeHtml(payload.footer.text ?? "")}</span>
+        ${payload.footer.lastUpdated ? `<span class="dashboard-footer__updated">${escapeHtml(payload.footer.lastUpdated)}</span>` : ""}
+      </div>`
+    : "";
 
   const downloadSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
   const refreshSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>`;
 
+  // Custom column count or default auto-fill
+  const cols = payload.columns;
+  const gridStyle = cols
+    ? `style="grid-template-columns: repeat(${Math.min(Math.max(cols, 1), 4)}, 1fr)"`
+    : "";
+
+  // Layout determines order of hero/KPI/charts
+  let mainContent: string;
+  if (layout === "kpi-top") {
+    mainContent = `${kpiHtml}${heroHtml}<div class="chart-grid" ${gridStyle}>${chartsHtml}</div>`;
+  } else if (layout === "hero-center") {
+    mainContent = `${heroHtml}${kpiHtml}<div class="chart-grid" ${gridStyle}>${chartsHtml}</div>`;
+  } else {
+    // default: hero above KPIs
+    mainContent = `${heroHtml}${kpiHtml}<div class="chart-grid" ${gridStyle}>${chartsHtml}</div>`;
+  }
+
   container.innerHTML = `
     <div class="dashboard">
+      <div class="particles"><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div><div class="particle"></div></div>
       <div class="header">
         <div class="header__brand">
           <span class="header__dot"></span>
-          ${escapeHtml(title)}
+          <span class="${shimmerClass.trim()}">${escapeHtml(title)}</span>
         </div>
         <div class="header__right">
           <span class="header__meta">${new Date().toLocaleDateString(undefined, { dateStyle: "medium" })}</span>
@@ -97,10 +228,8 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
         </div>
       </div>
       <div class="dashboard-main">
-        ${kpiHtml}
-        <div class="chart-grid">
-          ${chartsHtml}
-        </div>
+        ${mainContent}
+        ${footerHtml}
       </div>
     </div>
   `;
@@ -113,9 +242,9 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
     // Clone the dashboard so the live DOM is never touched
     const clone = dashEl.cloneNode(true) as HTMLElement;
 
-    // Match exact dimensions of the original
-    const rect = dashEl.getBoundingClientRect();
-    clone.style.cssText = `position:fixed;left:-9999px;top:0;width:${rect.width}px;pointer-events:none;`;
+    // Match exact dimensions of the original (scrollWidth captures overflow that getBoundingClientRect misses)
+    const fullW = Math.max(dashEl.getBoundingClientRect().width, dashEl.scrollWidth);
+    clone.style.cssText = `position:fixed;left:-99999px;top:0;width:${fullW}px;pointer-events:none;`;
     document.body.appendChild(clone);
 
     // 1. Swap cloned canvases to <img> (cloned canvases lose pixel data)
@@ -129,13 +258,40 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
       cv.style.display = "none";
     });
 
-    // 2. Force animations off, opacity on (KPI values use fadeInScale with opacity:0 start)
+    // 2. Freeze animations/transitions (no blanket transform/opacity kill)
     const overrideStyle = document.createElement("style");
-    overrideStyle.textContent = `[data-mcp-clone] *,[data-mcp-clone] *::before,[data-mcp-clone] *::after{animation:none!important;opacity:1!important;transform:none!important;}`;
+    overrideStyle.textContent = [
+      `[data-mcp-clone] *,[data-mcp-clone] *::before,[data-mcp-clone] *::after{animation:none!important;transition:none!important;}`,
+      `[data-mcp-clone] .card,[data-mcp-clone] .chart-wrapper{opacity:1!important;}`,
+      `[data-mcp-clone] .card::before{display:none!important;}`,
+    ].join("");
     clone.setAttribute("data-mcp-clone", "");
     document.head.appendChild(overrideStyle);
 
-    // 3. Hide action buttons in the clone
+    // 3. Resolve color-mix() to inline rgba() (browser returns color(srgb) which html2canvas can't parse)
+    const accent = getComputedStyle(dashEl).getPropertyValue("--accent").trim() || "#6366f1";
+
+    clone.querySelectorAll<HTMLElement>(".hero-orb").forEach(orb => {
+      const c = orb.style.getPropertyValue("--orb-color").trim() || accent;
+      const aura = orb.querySelector<HTMLElement>(".hero-orb__aura");
+      if (aura) {
+        aura.style.background = `radial-gradient(circle at 50% 50%, ${_rgba(c, 50)} 0%, ${_rgba(c, 30)} 30%, ${_rgba(c, 12)} 55%, transparent 70%)`;
+      }
+      const sphere = orb.querySelector<HTMLElement>(".hero-orb__sphere");
+      if (sphere) {
+        sphere.style.background = `radial-gradient(circle at 45% 45%, ${c} 0%, ${_mixBlack(c, 60)} 40%, ${_rgba(c, 25)} 70%, ${_rgba(c, 10)} 100%)`;
+        sphere.style.boxShadow = `0 0 25px ${c}, 0 0 60px ${_rgba(c, 50)}, inset 0 0 40px rgba(255,255,255,0.08), inset 0 0 70px ${_mixBlack(c, 40)}`;
+      }
+    });
+
+    clone.querySelectorAll<HTMLElement>('.hero-gem[data-gem-bg="dark"] .hero-gem__text').forEach(el => {
+      el.style.color = _mixTwo("#f0f0ff", 88, accent);
+    });
+    clone.querySelectorAll<HTMLElement>('.hero-gem[data-gem-bg="light"] .hero-gem__text').forEach(el => {
+      el.style.color = _mixTwo("#1a1a2e", 85, accent);
+    });
+
+    // 4. Hide action buttons in the clone
     clone.querySelectorAll<HTMLElement>(".header__right .export-btn, .chart-card__actions").forEach((el) => {
       el.style.display = "none";
     });
@@ -146,10 +302,13 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
         scale: window.devicePixelRatio || 2,
         useCORS: true,
         logging: false,
+        windowWidth: fullW,
+        windowHeight: clone.scrollHeight,
       });
       await saveCanvasViaServer(canvas, title);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Screenshot failed:", e);
+      showToast(`Export failed: ${e.message}`, true);
     } finally {
       clone.remove();
       overrideStyle.remove();
@@ -164,6 +323,15 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
     (window as any).__mcpRefresh?.();
   });
 
+  // Dashboard title click handler
+  const brandEl = container.querySelector<HTMLElement>(".header__brand");
+  if (brandEl) {
+    brandEl.style.cursor = "pointer";
+    brandEl.addEventListener("click", () => {
+      sendClickMessage(`[Dashboard] "${title}"`);
+    });
+  }
+
   // Wire up KPI click handlers
   container.querySelectorAll<HTMLElement>("[data-kpi-index]").forEach((el) => {
     el.style.cursor = "pointer";
@@ -177,14 +345,122 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
     });
   });
 
+  // Render hero section if present
+  if (heroes.length > 0) {
+    const heroEl = container.querySelector<HTMLElement>("#dash-hero");
+    if (heroEl) {
+      if (heroes.length === 1) {
+        const h = heroes[0];
+        if (h.variant && h.variant !== "progress_ring") {
+          renderHeroWidget(heroEl, h);
+        } else {
+          renderHeroRing(heroEl, {
+            value: h.value ?? "",
+            unit: h.unit,
+            label: h.label,
+            progress: h.progress,
+            color: h.color,
+            size: h.size || "lg",
+            style: h.style as "ring" | "gauge" | undefined,
+          });
+        }
+      } else {
+        heroEl.classList.add("dashboard-hero--multi");
+        heroes.forEach((h, i) => {
+          const slot = document.createElement("div");
+          slot.className = "dashboard-hero__slot";
+          heroEl.appendChild(slot);
+          if (h.variant && h.variant !== "progress_ring") {
+            renderHeroWidget(slot, h);
+          } else {
+            renderHeroRing(slot, {
+              value: h.value ?? "",
+              unit: h.unit,
+              label: h.label,
+              progress: h.progress,
+              color: h.color,
+              size: h.size || "md",
+              style: h.style as "ring" | "gauge" | undefined,
+            });
+          }
+        });
+      }
+    }
+  }
+
   // Render each chart after DOM is ready
   requestAnimationFrame(() => {
     charts.forEach((c, i) => {
-      const canvas = container.querySelector<HTMLCanvasElement>(`#dash-chart-${i}`);
-      if (!canvas) return;
-      renderChartWidget(canvas, c);
+      // Handle hero_ring / hero widget type
+      if (heroTypes.has(c.type)) {
+        const heroWidgetEl = container.querySelector<HTMLElement>(`#dash-hero-widget-${i}`);
+        if (heroWidgetEl) {
+          const heroData = (c.data ?? {}) as Record<string, unknown>;
+          if (heroData.variant && heroData.variant !== "progress_ring") {
+            renderHeroWidget(heroWidgetEl, heroData);
+          } else {
+            renderHeroRing(heroWidgetEl, {
+              value: (heroData.value as string | number) ?? "",
+              unit: heroData.unit as string | undefined,
+              label: heroData.label as string | undefined,
+              progress: heroData.progress as number | undefined,
+              color: heroData.color as string | undefined,
+              size: (heroData.size as "sm" | "md" | "lg" | "xl") || "md",
+              style: heroData.style as "ring" | "gauge" | undefined,
+            });
+          }
+          // Add export/refresh buttons to the hero chart-card
+          const heroCard = heroWidgetEl.closest<HTMLElement>(".chart-card");
+          if (heroCard) {
+            addHtmlExportButton(heroCard, c.title ?? `Chart ${i + 1}`);
+            addRefreshButton(heroCard, () => (window as any).__mcpRefresh?.());
+          }
+        }
+        return;
+      }
+
+      // Chart.js canvas types
+      if (canvasTypes.has(c.type)) {
+        const canvas = container.querySelector<HTMLCanvasElement>(`#dash-chart-${i}`);
+        if (!canvas) return;
+        renderChartWidget(canvas, c);
+        return;
+      }
+
+      // CSS/SVG chart types - delegate to registry
+      const cssEl = container.querySelector<HTMLElement>(`#dash-css-chart-${i}`);
+      if (!cssEl) return;
+      const entry = getChartEntry(c.type);
+      if (entry) {
+        // Build payload from chart widget data
+        const payload = { type: c.type, title: c.title ?? "", ...c.data as object, ...(c as Record<string, unknown>) };
+        entry.render(cssEl, payload);
+      }
     });
   });
+
+  // Masonry layout - each card spans exactly its content height in 1px rows
+  const chartGrid = container.querySelector<HTMLElement>(".chart-grid");
+  if (chartGrid) {
+    let masonryRAF = 0;
+    function applyMasonry(grid: HTMLElement): void {
+      const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
+      const items = grid.querySelectorAll<HTMLElement>(':scope > .card, :scope > [id^="dash-css-chart-"]');
+      items.forEach(card => { card.style.gridRowEnd = ""; });
+      grid.offsetHeight; // force reflow to measure natural heights
+      items.forEach(card => {
+        const span = Math.ceil((card.scrollHeight + gap) / (1 + gap));
+        card.style.gridRowEnd = `span ${span}`;
+      });
+    }
+
+    requestAnimationFrame(() => applyMasonry(chartGrid));
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(masonryRAF);
+      masonryRAF = requestAnimationFrame(() => applyMasonry(chartGrid));
+    });
+    chartGrid.querySelectorAll<HTMLElement>(':scope > .card, :scope > [id^="dash-css-chart-"]').forEach(card => ro.observe(card));
+  }
 }
 
 function buildKpiCard(kpi: KPI, index: number): string {
@@ -224,9 +500,10 @@ function buildKpiCard(kpi: KPI, index: number): string {
 
 function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): void {
   if (chart.type === "pie") {
-    const data = chart.data ?? [];
+    const data = (chart.data ?? []) as Array<{ label: string; value: number }>;
+    const palette = resolveColors(undefined, data.length);
     const total = data.reduce((s, d) => s + d.value, 0);
-    const colors = data.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]);
+    const colors = data.map((_, i) => palette[i % palette.length]);
     const isDonut = (chart.options?.donut as boolean) === true;
 
     const chartTitle = chart.title ?? "chart";
@@ -279,6 +556,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
   if (chart.type === "bar") {
     const labels = chart.labels ?? [];
     const datasets = chart.datasets ?? [];
+    const palette = resolveColors(undefined, datasets.length);
     const isStacked = (chart.options?.stacked as boolean) === true;
     const isHorizontal = (chart.options?.horizontal as boolean) === true;
 
@@ -290,8 +568,8 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
         datasets: datasets.map((ds, i) => ({
           label: ds.label,
           data: ds.data,
-          backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + "CC",
-          borderColor: CHART_COLORS[i % CHART_COLORS.length],
+          backgroundColor: palette[i % palette.length] + "CC",
+          borderColor: palette[i % palette.length],
           borderWidth: 1,
           borderRadius: 4,
           borderSkipped: false,
@@ -327,6 +605,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
   if (chart.type === "line") {
     const labels = chart.labels ?? [];
     const datasets = chart.datasets ?? [];
+    const palette = resolveColors(undefined, datasets.length);
     const shouldFill = (chart.options?.fill as boolean) !== false;
     const isSmooth = (chart.options?.smooth as boolean) !== false;
 
@@ -336,7 +615,7 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
       data: {
         labels,
         datasets: datasets.map((ds, i) => {
-          const color = CHART_COLORS[i % CHART_COLORS.length];
+          const color = palette[i % palette.length];
           return {
             label: ds.label,
             data: ds.data,
@@ -385,3 +664,5 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
     if (lineCard) addExportButton(lineCard, lineChart, lineTitle);
   }
 }
+
+registerChart("dashboard", "render_dashboard", renderDashboard);

@@ -11,6 +11,18 @@ export function getAppInstance(): App | null {
   return _app;
 }
 
+// -- Click position tracking --
+// MCP Apps iframes are sized to full content height (no internal scroll).
+// `position: fixed` equals `position: absolute` in this context, so we
+// track the actual click coordinates and show feedback there instead.
+let _lastClickX = 0;
+let _lastClickY = 0;
+
+document.addEventListener("click", (e) => {
+  _lastClickX = e.pageX;
+  _lastClickY = e.pageY;
+}, true); // capture phase - runs before chart handlers
+
 // -- Click selection tray --
 // Clicks accumulate as visual chips. User sends when ready via "Ask" button.
 const _selections: string[] = [];
@@ -76,11 +88,48 @@ function renderChips(): void {
   tray.classList.toggle("selection-tray--visible", _selections.length > 0);
 }
 
+/** Show a count badge at click position that flies toward bottom-center */
+function showClickFeedback(): void {
+  const existing = document.querySelector(".click-feedback");
+  if (existing) existing.remove();
+
+  const count = _selections.length;
+  const badge = document.createElement("div");
+  badge.className = "click-feedback";
+  badge.textContent = String(count);
+
+  badge.style.left = `${_lastClickX}px`;
+  badge.style.top = `${_lastClickY - 20}px`;
+
+  // Compute direction toward bottom-center of the document
+  const targetX = document.documentElement.scrollWidth / 2;
+  const targetY = document.documentElement.scrollHeight;
+  const dx = targetX - _lastClickX;
+  const dy = targetY - (_lastClickY - 20);
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const fly = 100; // travel distance in px
+  badge.style.setProperty("--fly-x", `${(dx / dist) * fly}px`);
+  badge.style.setProperty("--fly-y", `${(dy / dist) * fly}px`);
+
+  document.body.appendChild(badge);
+
+  requestAnimationFrame(() => {
+    badge.classList.add("click-feedback--visible");
+  });
+
+  setTimeout(() => {
+    badge.classList.add("click-feedback--fly");
+  }, 350);
+
+  setTimeout(() => badge.remove(), 1000);
+}
+
 /** Add a clicked item to the selection tray */
 export function sendClickMessage(item: string): void {
   if (!_app) return;
   _selections.push(item);
   renderChips();
+  showClickFeedback();
 }
 
 // -- Last tool call storage for live refresh --
@@ -95,6 +144,37 @@ export function storeLastToolCall(name: string, args: Record<string, unknown>): 
 export function getLastToolCall(): { name: string; args: Record<string, unknown> } | null {
   if (!_lastToolName || !_lastToolArgs) return null;
   return { name: _lastToolName, args: _lastToolArgs };
+}
+
+// -- Chart Registry --
+// Each chart file self-registers via registerChart() as a side-effect import.
+// app.ts dispatches rendering and tool-name lookups through this registry.
+
+interface ChartEntry {
+  toolName: string;
+  render: (root: HTMLElement, data: any) => void;
+}
+
+const CHART_REGISTRY: Record<string, ChartEntry> = {};
+
+export function registerChart(
+  type: string,
+  toolName: string,
+  render: (root: HTMLElement, data: any) => void,
+): void {
+  CHART_REGISTRY[type] = { toolName, render };
+}
+
+export function getChartEntry(type: string): ChartEntry | undefined {
+  return CHART_REGISTRY[type];
+}
+
+export function getTypeToToolMap(): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const [type, entry] of Object.entries(CHART_REGISTRY)) {
+    map[type] = entry.toolName;
+  }
+  return map;
 }
 
 export const CHART_COLORS = [
@@ -123,8 +203,8 @@ export function tooltipStyle() {
     displayColors: true,
     boxWidth: 8,
     boxHeight: 8,
-    titleFont: { size: 12, weight: "bold" as const },
-    bodyFont: { size: 11 },
+    titleFont: { size: 12, weight: "bold" as const, family: getCSSVar("--font-body") || undefined },
+    bodyFont: { size: 11, family: getCSSVar("--font-body") || undefined },
   };
 }
 
@@ -134,10 +214,68 @@ export function escapeHtml(s: string): string {
   return div.innerHTML;
 }
 
-/** Resolve user-provided colors or fall back to default palette */
+/** Parse hex color to [r, g, b] */
+function hexToRGB(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.substring(0, 2), 16),
+    parseInt(h.substring(2, 4), 16),
+    parseInt(h.substring(4, 6), 16),
+  ];
+}
+
+/** Convert RGB to hex */
+function rgbToHex(r: number, g: number, b: number): string {
+  const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+  return `#${[r, g, b].map((c) => clamp(c).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Generate a lighter or darker variant of a hex color */
+function shiftLightness(hex: string, amount: number): string {
+  const [r, g, b] = hexToRGB(hex);
+  // Shift toward white (positive) or black (negative)
+  if (amount > 0) {
+    return rgbToHex(
+      r + (255 - r) * amount,
+      g + (255 - g) * amount,
+      b + (255 - b) * amount,
+    );
+  }
+  return rgbToHex(r * (1 + amount), g * (1 + amount), b * (1 + amount));
+}
+
+/** Resolve user-provided colors or fall back to theme CSS vars, then default palette.
+ *  When count exceeds the base palette, auto-generates additional distinct colors
+ *  by shifting lightness - the LLM never needs to know the palette size. */
 export function resolveColors(custom?: string[], count?: number): string[] {
-  if (custom && custom.length > 0) return custom;
-  return CHART_COLORS;
+  let base: string[];
+
+  if (custom && custom.length > 0) {
+    base = custom;
+  } else {
+    // Try reading theme CSS variables first
+    const themed: string[] = [];
+    for (let i = 1; i <= 7; i++) {
+      const v = getCSSVar(`--c${i}`);
+      if (v) themed.push(v);
+    }
+    base = themed.length >= 7 ? themed : CHART_COLORS;
+  }
+
+  // If we have enough colors, return as-is
+  if (!count || count <= base.length) return base;
+
+  // Generate extra colors by cycling through base with lightness shifts
+  const extended = [...base];
+  const shifts = [0.3, -0.25, 0.55, -0.45]; // lighter, darker, even lighter, even darker
+  let shiftIdx = 0;
+  while (extended.length < count) {
+    const sourceColor = base[extended.length % base.length];
+    extended.push(shiftLightness(sourceColor, shifts[shiftIdx % shifts.length]));
+    // Advance shift level after each full cycle through base colors
+    if (extended.length % base.length === 0) shiftIdx++;
+  }
+  return extended;
 }
 
 /** Nudge Chart.js to recalculate at key intervals after creation.
@@ -162,7 +300,7 @@ function getOrCreateActions(header: Element): HTMLElement {
 }
 
 /** Show a brief toast notification anchored below the header */
-function showToast(message: string, isError = false): void {
+export function showToast(message: string, isError = false): void {
   // Find the header to anchor below it; fall back to top of viewport
   const header = document.querySelector<HTMLElement>(".header, .chart-card__header");
   const topPx = header ? header.getBoundingClientRect().bottom + 8 : 12;
@@ -225,8 +363,16 @@ export function addExportButton(
   btn.title = "Download as PNG";
   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
   btn.addEventListener("click", () => {
-    // Extract base64 data from data URL (strip prefix)
-    const dataUrl = chart.toBase64Image();
+    // Composite: fill card background behind the transparent Chart.js canvas
+    const srcCanvas = (chart as any).canvas as HTMLCanvasElement;
+    const out = document.createElement("canvas");
+    out.width = srcCanvas.width;
+    out.height = srcCanvas.height;
+    const ctx = out.getContext("2d")!;
+    ctx.fillStyle = getCSSVar("--bg-card") || "#1C2333";
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(srcCanvas, 0, 0);
+    const dataUrl = out.toDataURL("image/png");
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
     saveViaServer(`${filename}.png`, base64, "base64");
   });
@@ -270,6 +416,66 @@ export async function saveCanvasViaServer(canvas: HTMLCanvasElement, filename: s
   await saveViaServer(name, base64, "base64");
 }
 
+/** Add a PNG export button for CSS/SVG charts (uses html2canvas on an off-screen clone) */
+export function addHtmlExportButton(
+  container: HTMLElement,
+  filename: string,
+): void {
+  const header = container.querySelector(".chart-card__header");
+  if (!header) return;
+
+  const btn = document.createElement("button");
+  btn.className = "export-btn";
+  btn.title = "Download as PNG";
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+  btn.addEventListener("click", async () => {
+    const card = container.querySelector<HTMLElement>(".chart-card") ?? container;
+    try {
+      const { default: html2canvas } = await import("html2canvas-pro");
+
+      // Clone off-screen so the live DOM is never touched (no flash)
+      const clone = card.cloneNode(true) as HTMLElement;
+      const fullW = Math.max(card.getBoundingClientRect().width, card.scrollWidth);
+      clone.style.cssText = `position:fixed;left:-99999px;top:0;width:${fullW}px;pointer-events:none;`;
+      document.body.appendChild(clone);
+
+      // Freeze animations, force visibility on .card/.chart-wrapper only
+      const tag = "data-mcp-clone";
+      clone.setAttribute(tag, "");
+      const overrideStyle = document.createElement("style");
+      overrideStyle.textContent = [
+        `[${tag}],[${tag}] *,[${tag}] *::before,[${tag}] *::after{animation:none!important;transition:none!important;}`,
+        `[${tag}].card,[${tag}] .card,[${tag}] .chart-wrapper{opacity:1!important;}`,
+        `[${tag}].card::before,[${tag}] .card::before{display:none!important;}`,
+      ].join("");
+      document.head.appendChild(overrideStyle);
+
+      // Hide action buttons in clone
+      clone.querySelectorAll<HTMLElement>(".chart-card__actions").forEach((el) => {
+        el.style.display = "none";
+      });
+
+      const canvas = await html2canvas(clone, {
+        backgroundColor: getCSSVar("--bg-card") || "#1C2333",
+        scale: window.devicePixelRatio || 2,
+        useCORS: true,
+        logging: false,
+        windowWidth: fullW,
+        windowHeight: clone.scrollHeight,
+      });
+
+      clone.remove();
+      overrideStyle.remove();
+
+      await saveCanvasViaServer(canvas, filename);
+    } catch (e: any) {
+      console.error("HTML export failed:", e);
+      showToast(`Export failed: ${e.message}`, true);
+    }
+  });
+  getOrCreateActions(header).appendChild(btn);
+}
+
 /** Add a refresh button to a chart card header */
 export function addRefreshButton(
   container: HTMLElement,
@@ -289,3 +495,15 @@ export function addRefreshButton(
   });
   getOrCreateActions(header).appendChild(btn);
 }
+
+// -- Global: make chart titles clickable via event delegation --
+// Runs once on load. Clicks on any `.chart-card__title` send a selection message.
+document.addEventListener("click", (e) => {
+  const titleEl = (e.target as HTMLElement).closest<HTMLElement>(".chart-card__title");
+  if (!titleEl) return;
+  const text = titleEl.textContent?.trim() ?? "";
+  // Find the chart-view container to infer chart type from registry
+  const chartView = titleEl.closest<HTMLElement>(".chart-view");
+  const chartType = chartView?.className.match(/chart-view/)?.[0] ? "" : "";
+  if (text) sendClickMessage(`[Chart] "${text}" - selected`);
+});

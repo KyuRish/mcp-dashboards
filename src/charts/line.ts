@@ -9,7 +9,8 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
+import { resolveTheme, applyTheme } from "../themes.js";
 
 Chart.register(
   LineController,
@@ -32,6 +33,10 @@ interface LineData {
     showPoints?: boolean;
     colors?: string[];
   };
+  theme?: string;
+  palette?: string;
+  typography?: string;
+  effects?: string;
 }
 
 export function renderLineChart(container: HTMLElement, payload: LineData): void {
@@ -40,12 +45,20 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
   const isSmooth = options.smooth !== false;
   const showPoints = options.showPoints === true;
 
+  // Apply theme if specified
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
+
   container.innerHTML = `
     <div class="chart-view">
       <div class="card chart-card">
         <div class="chart-card__header">
           <div>
-            <div class="chart-card__title">${escapeHtml(title)}</div>
+            <div class="chart-card__title${theme?.effects.shimmerTitle ? " shimmer-text" : ""}">${escapeHtml(title)}</div>
             <div class="chart-card__subtitle">${datasets.length} series - ${labels.length} points</div>
           </div>
         </div>
@@ -57,7 +70,7 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
   `;
 
   const canvas = container.querySelector<HTMLCanvasElement>("#chart-canvas")!;
-  const palette = resolveColors(options.colors);
+  const palette = resolveColors(options.colors, datasets.length);
 
   const chartInstance = new Chart(canvas, {
     type: "line",
@@ -144,3 +157,5 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
+
+registerChart("line", "render_line_chart", renderLineChart);

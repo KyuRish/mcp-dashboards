@@ -7,7 +7,8 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
+import { resolveTheme, applyTheme } from "../themes.js";
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
@@ -20,6 +21,10 @@ interface BarData {
     stacked?: boolean;
     colors?: string[];
   };
+  theme?: string;
+  palette?: string;
+  typography?: string;
+  effects?: string;
 }
 
 export function renderBarChart(container: HTMLElement, payload: BarData): void {
@@ -27,12 +32,20 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
   const isHorizontal = options.horizontal === true;
   const isStacked = options.stacked === true;
 
+  // Apply theme if specified
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
+
   container.innerHTML = `
     <div class="chart-view">
       <div class="card chart-card">
         <div class="chart-card__header">
           <div>
-            <div class="chart-card__title">${escapeHtml(title)}</div>
+            <div class="chart-card__title${theme?.effects.shimmerTitle ? " shimmer-text" : ""}">${escapeHtml(title)}</div>
             <div class="chart-card__subtitle">${datasets.length} series - ${labels.length} categories</div>
           </div>
         </div>
@@ -44,7 +57,7 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
   `;
 
   const canvas = container.querySelector<HTMLCanvasElement>("#chart-canvas")!;
-  const palette = resolveColors(options.colors);
+  const palette = resolveColors(options.colors, datasets.length);
 
   const chartInstance = new Chart(canvas, {
     type: "bar",
@@ -114,3 +127,5 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
+
+registerChart("bar", "render_bar_chart", renderBarChart);

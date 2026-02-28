@@ -7,7 +7,8 @@ import {
 } from "chart.js";
 import "chartjs-adapter-luxon";
 import { CandlestickController, CandlestickElement, OhlcController, OhlcElement } from "chartjs-chart-financial";
-import { getCSSVar, tooltipStyle, escapeHtml, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, addExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
+import { resolveTheme, applyTheme } from "../themes.js";
 
 Chart.register(
   LinearScale,
@@ -36,12 +37,24 @@ interface CandlestickData {
     type?: "candlestick" | "ohlc";
     showVolume?: boolean;
   };
+  theme?: string;
+  palette?: string;
+  typography?: string;
+  effects?: string;
 }
 
 export function renderCandlestickChart(container: HTMLElement, payload: CandlestickData): void {
   const { title, data, options } = payload;
   const chartType = options.type ?? "candlestick";
   const showVolume = options.showVolume === true && data.some((d) => d.v !== undefined);
+
+  // Apply theme if specified
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
 
   const upColor = getCSSVar("--positive") || "#22C55E";
   const downColor = getCSSVar("--negative") || "#EF4444";
@@ -51,7 +64,7 @@ export function renderCandlestickChart(container: HTMLElement, payload: Candlest
       <div class="card chart-card">
         <div class="chart-card__header">
           <div>
-            <div class="chart-card__title">${escapeHtml(title)}</div>
+            <div class="chart-card__title${theme?.effects.shimmerTitle ? " shimmer-text" : ""}">${escapeHtml(title)}</div>
             <div class="chart-card__subtitle">${data.length} ${chartType === "ohlc" ? "OHLC" : "candlestick"} bars</div>
           </div>
         </div>
@@ -178,3 +191,5 @@ export function renderCandlestickChart(container: HTMLElement, payload: Candlest
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
+
+registerChart("candlestick", "render_candlestick_chart", renderCandlestickChart);

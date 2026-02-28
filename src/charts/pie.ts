@@ -1,5 +1,6 @@
 import { Chart, ArcElement, Tooltip, Legend, PieController, DoughnutController } from "chart.js";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
+import { resolveTheme, applyTheme } from "../themes.js";
 
 Chart.register(ArcElement, Tooltip, Legend, PieController, DoughnutController);
 
@@ -11,6 +12,10 @@ interface PieData {
     showLegend?: boolean;
     colors?: string[];
   };
+  theme?: string;
+  palette?: string;
+  typography?: string;
+  effects?: string;
 }
 
 export function renderPieChart(container: HTMLElement, payload: PieData): void {
@@ -18,12 +23,20 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
   const showLegend = options.showLegend !== false;
   const isDonut = options.donut === true;
 
+  // Apply theme if specified
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
+
   container.innerHTML = `
     <div class="chart-view">
       <div class="card chart-card">
         <div class="chart-card__header">
           <div>
-            <div class="chart-card__title">${escapeHtml(title)}</div>
+            <div class="chart-card__title${theme?.effects.shimmerTitle ? " shimmer-text" : ""}">${escapeHtml(title)}</div>
             <div class="chart-card__subtitle">${data.length} segments</div>
           </div>
         </div>
@@ -36,7 +49,7 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
 
   const canvas = container.querySelector<HTMLCanvasElement>("#chart-canvas")!;
   const total = data.reduce((s, d) => s + d.value, 0);
-  const palette = resolveColors(options.colors);
+  const palette = resolveColors(options.colors, data.length);
   const colors = data.map((_, i) => palette[i % palette.length]);
 
   const chartInstance = new Chart(canvas, {
@@ -96,3 +109,5 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
   addExportButton(container, chartInstance, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
+
+registerChart("pie", "render_pie_chart", renderPieChart);

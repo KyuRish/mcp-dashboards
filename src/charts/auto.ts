@@ -2,7 +2,7 @@ import { renderPieChart } from "./pie.js";
 import { renderBarChart } from "./bar.js";
 import { renderLineChart } from "./line.js";
 import { renderTable } from "./table.js";
-import { escapeHtml } from "./shared.js";
+import { escapeHtml, registerChart } from "./shared.js";
 
 export interface AutoChartData {
   title: string;
@@ -399,3 +399,5 @@ export function renderAutoChart(container: HTMLElement, payload: AutoChartData):
     renderRaw(container, title, data);
   }
 }
+
+registerChart("auto", "render_from_json", renderAutoChart);

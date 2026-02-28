@@ -4,35 +4,37 @@ mcp-name: io.github.KyuRish/mcp-dashboard
 
 **Turn your data into interactive dashboards inside any AI client.**
 
-[![npm](https://img.shields.io/npm/v/mcp-dashboard)](https://www.npmjs.com/package/mcp-dashboard)
+[![npm](https://img.shields.io/npm/v/mcp-dashboards)](https://www.npmjs.com/package/mcp-dashboards)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 
-The first MCP server that renders live, interactive Chart.js visualizations directly inside Claude Desktop, VS Code, and other MCP Apps-compatible clients. No browser needed - your charts appear right in the conversation.
+Renders live, interactive Chart.js visualizations directly inside Claude Desktop, VS Code, and other MCP Apps-compatible clients. No browser needed - charts appear right in the conversation.
 
-## Features
+## What It Does
 
-- **Pie & Donut Charts** - key-value data with percentages, labels, hover tooltips
-- **Bar Charts** - vertical/horizontal, stacked, multi-series support
-- **Line & Area Charts** - smooth curves, gradient fills, time series
-- **Sortable Data Tables** - click-to-sort columns, numeric alignment, striped rows
-- **Full Dashboards** - KPI cards with trend indicators + multiple charts in a responsive grid
-- **Auto-Detect from JSON** - pass any JSON and get the best visualization automatically
-- **Auto Dark/Light Mode** - adapts to your system theme
-- **Fully Self-Contained** - Chart.js bundled inline, zero external requests
-- **Animated** - staggered card entrances, smooth hover effects, loading states
+- **22 chart tools** - pie, bar, line, scatter, candlestick, bullet, lollipop, dumbbell, heatmap, and more
+- **Full dashboards** - KPI cards + masonry-packed multi-chart grids in a single tool call
+- **Interactive** - click any data point, it gets selected. Click "Ask" to send selections back to Claude for follow-up
+- **20 themes** - dark, light, neon, forest, ocean, matrix - with mix-and-match palette/typography/effects
+- **Export** - PNG screenshots and CSV data export from any chart
+- **Auto-detect** - pass any JSON or URL and get the best visualization automatically
+- **Self-contained** - Chart.js bundled via Vite into a single HTML file. Zero CDN, zero external requests
 
-## Installation
+## Quick Start
 
 ### Claude Desktop
 
-Add to your Claude Desktop config (`claude_desktop_config.json`):
+Add to your `claude_desktop_config.json`:
+
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "dashboard": {
       "command": "npx",
-      "args": ["-y", "mcp-dashboard", "--stdio"]
+      "args": ["-y", "mcp-dashboards", "--stdio"]
     }
   }
 }
@@ -41,145 +43,102 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 ### Claude Code (VS Code)
 
 ```bash
-claude mcp add dashboard -- npx -y mcp-dashboard --stdio
+claude mcp add dashboard -- npx -y mcp-dashboards --stdio
 ```
 
 ### Remote (Streamable HTTP)
 
 ```bash
-npx mcp-dashboard
+npx mcp-dashboards
 # Server starts on http://localhost:3001/mcp
 ```
 
-## Tools
+## All Tools
 
-### `render_pie_chart`
+| Tool | Type | Best For |
+|------|------|----------|
+| `render_pie_chart` | Pie/Donut | Composition - "what makes up the whole?" |
+| `render_bar_chart` | Bar | Comparison - vertical, horizontal, stacked, multi-series |
+| `render_line_chart` | Line/Area | Trends - smooth curves, gradient fills, time series |
+| `render_scatter_chart` | Scatter | Relationships - per-point labels, reference lines, quadrants |
+| `render_candlestick_chart` | Candlestick | Finance - OHLC data with volume bars |
+| `render_bullet_chart` | Bullet | KPI vs target - 2-8 zone bands with labels (seniority, maturity) |
+| `render_lollipop_chart` | Lollipop | Ranking - clean dots with optional target markers |
+| `render_dumbbell_chart` | Dumbbell | Gaps - before/after with scale labels and zone bands |
+| `render_variance_chart` | Variance | Budget - actual vs budget, color-coded over/under |
+| `render_funnel_chart` | Funnel | Conversion - staged drop-off with percentages |
+| `render_slope_chart` | Slope | Change - ranking shifts between two periods |
+| `render_waffle_chart` | Waffle | Proportion - 10x10 grid showing composition |
+| `render_sparkline_chart` | Sparkline | Compact trends - mini cards with change indicators |
+| `render_radial_cluster` | Radial | Health check - multi-metric ring gauges with status |
+| `render_waterfall_chart` | Waterfall | Cumulative - cascading bars showing impact |
+| `render_heatmap_chart` | Heatmap | Intensity - 2D grid with color mapping |
+| `render_timeline_chart` | Timeline | Progress - milestone tracker with status indicators |
+| `render_hero_metric` | Hero | KPI widgets - 11 variants (progress ring, gem, orb, NPS, etc.) |
+| `render_dashboard` | Dashboard | Everything - KPI cards + multiple charts in responsive grid |
+| `render_table` | Table | Data - sortable columns, striped rows, CSV export |
+| `render_from_json` | Auto-detect | Any JSON data - picks the best chart automatically |
+| `render_from_url` | URL fetch | Fetches JSON from a URL and auto-visualizes |
 
-Render a pie or donut chart from label-value pairs.
+## When to Use Which Chart
 
-```
-"Show me a pie chart of browser market share:
-Chrome 65%, Safari 18%, Firefox 8%, Edge 5%, Other 4%"
-```
+| Question | Best Chart | Also Works |
+|----------|-----------|------------|
+| "What makes up the whole?" | Pie/Waffle | Stacked bar |
+| "How do values compare?" | Bar | Lollipop, Bullet |
+| "What's the trend over time?" | Line | Sparkline, Slope |
+| "Are we hitting targets?" | Bullet | Variance, Radial |
+| "Where's the gap?" | Dumbbell | Variance |
+| "How does X relate to Y?" | Scatter | Heatmap |
+| "What's the conversion rate?" | Funnel | Waterfall |
+| "What changed between periods?" | Slope | Dumbbell |
+| "What's the financial picture?" | Candlestick | Line |
+| "Show me the KPI" | Hero metric | Dashboard |
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| title | string | Yes | Chart title |
-| data | [{label, value}] | Yes | Array of segments |
-| options.donut | boolean | No | Hollow center (default: false) |
-| options.showLegend | boolean | No | Show legend (default: true) |
+## Themes
 
-### `render_bar_chart`
+20 built-in themes. Pass `theme` to any tool.
 
-Render vertical or horizontal bar charts with multi-series support.
+**Classic:** `boardroom`, `corporate`, `sales-floor`, `golden-treasury`, `clinical`, `startup`, `ops-control`, `tokyo-midnight`, `zen-garden`, `consultant`
 
-```
-"Create a bar chart comparing Q1-Q4 revenue for 2024 vs 2025"
-```
+**Black/AI:** `black-tron` (cyan neon), `black-elegance` (warm gold), `black-matrix` (green hacker)
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| title | string | Yes | Chart title |
-| labels | string[] | Yes | Category labels |
-| datasets | [{label, data}] | Yes | Data series |
-| options.horizontal | boolean | No | Horizontal bars (default: false) |
-| options.stacked | boolean | No | Stack datasets (default: false) |
+**Forest:** `forest-amber` (autumn warmth), `forest-earth` (terracotta)
 
-### `render_line_chart`
+**Sky:** `sky-light` (airy blue), `sky-ocean` (deep navy), `sky-twilight` (sunset gradient)
 
-Render line or area charts with smooth curves and gradient fills.
+**Gray/ML:** `gray-hf` (Hugging Face yellow), `gray-copilot` (GitHub dark + teal)
 
-```
-"Plot my portfolio value over the last 12 months as a line chart"
-```
+Mix-and-match with `palette`, `typography` (system, mono, professional, editorial, bold, techno, cyberpunk, luxury), and `effects` (none, subtle, shimmer, neon, energetic).
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| title | string | Yes | Chart title |
-| labels | string[] | Yes | X-axis labels |
-| datasets | [{label, data}] | Yes | Data series |
-| options.fill | boolean | No | Area fill (default: true) |
-| options.smooth | boolean | No | Smooth curves (default: true) |
-| options.showPoints | boolean | No | Show data points (default: false) |
+## Interactive Features
 
-### `render_dashboard`
+- **Click to select** - click any bar, slice, point, or row. A badge animates and the item appears in the selection tray.
+- **Ask Claude** - accumulated selections can be sent back to Claude via the "Ask" button for follow-up analysis.
+- **PNG export** - screenshot any chart or dashboard to your Downloads folder.
+- **CSV export** - export table data as CSV files.
+- **Refresh** - re-run the same tool call to update data.
 
-Render a full dashboard with KPI cards and multiple charts.
+## How It Works
 
-```
-"Create a sales dashboard with total revenue, growth rate, and customer count as KPIs,
-plus a line chart of monthly revenue and a pie chart of revenue by region"
-```
+Uses [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) to return interactive HTML rendered inside AI clients as sandboxed iframes.
 
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| title | string | Yes | Dashboard title |
-| kpis | [{label, value, change?, prefix?, suffix?}] | No | KPI metric cards |
-| charts | [{type, title?, ...chartConfig}] | Yes | Charts to display |
+1. You ask the AI to visualize data
+2. AI calls the appropriate MCP tool with your data
+3. Server returns structured content linked to a bundled HTML resource
+4. Client renders interactive Chart.js visualizations inline in the conversation
 
-**KPI fields:**
-- `label` - metric name
-- `value` - the number or text
-- `change` - percentage change (positive = green arrow up, negative = red arrow down)
-- `prefix` - e.g. "$", "Rs."
-- `suffix` - e.g. "%", " users"
-
-### `render_table`
-
-Render a sortable, interactive data table. Click column headers to sort.
-
-```
-"Show me a table of the top 10 countries by GDP"
-```
-
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| title | string | Yes | Table title |
-| columns | string[] | Yes | Column names in display order |
-| rows | [{key: value}] | Yes | Array of row objects |
-| options.sortable | boolean | No | Enable sorting (default: true) |
-| options.striped | boolean | No | Alternating row colors (default: false) |
-
-### `render_from_json`
-
-Pass any JSON data and get the best visualization automatically.
-
-```
-"Visualize this JSON data: [{"month": "Jan", "sales": 1200}, ...]"
-```
-
-**Auto-detection rules:**
-- `[{name, value}]` (1 string + 1 number key) - Pie chart
-- `[{category, sales, profit}]` (1 string + N number keys) - Grouped bar chart
-- `[{date, price}]` (date-like key + number keys) - Line chart
-- `{key: number}` (flat object with numeric values) - Pie chart
-- `[1, 2, 3]` (array of numbers) - Bar chart
-- Complex objects with 3+ keys - Sortable table
-- Unrecognizable - Raw JSON display
-
-**Parameters:**
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| title | string | Yes | Chart title |
-| data | any | Yes | Any JSON data |
-| options.preferredType | string | No | Force: "pie", "bar", "line", or "table" |
+The entire UI (Chart.js + CSS + JS) is bundled into a single self-contained HTML file using Vite. No CDN, no external requests.
 
 ## Development
 
 ```bash
-git clone https://github.com/KyuRish/mcp-dashboard.git
-cd mcp-dashboard
+git clone https://github.com/KyuRish/mcp-dashboards.git
+cd mcp-dashboards
 npm install
 npm run build
 npm run serve
 ```
-
-### Scripts
 
 | Script | Description |
 |--------|-------------|
@@ -188,23 +147,18 @@ npm run serve
 | `npm run build:server` | Compile TypeScript server |
 | `npm run serve` | Start HTTP server on port 3001 |
 | `npm start` | Build + serve |
-
-## How It Works
-
-This server uses [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) (SEP-1865) to return interactive HTML that renders inside AI clients as sandboxed iframes.
-
-1. You ask the AI to visualize data
-2. AI calls the appropriate MCP tool with your data
-3. Server generates structured content + links to a bundled HTML resource
-4. Client renders the HTML as an interactive widget inline in the conversation
-5. Chart.js handles rendering, tooltips, hover effects - all inside the iframe
-
-The entire UI (Chart.js + CSS + JS) is bundled into a single self-contained HTML file using Vite + vite-plugin-singlefile. No CDN, no external requests.
+| `npm run dev` | Watch mode (UI + server) |
 
 ## Requirements
 
 - Node.js 18+
 - An MCP Apps-compatible client (Claude Desktop, VS Code, Goose, etc.)
+
+## Support
+
+If this project is useful to you, consider supporting development:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 
 ## License
 

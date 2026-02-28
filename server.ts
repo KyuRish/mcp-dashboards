@@ -32,6 +32,12 @@ const PieDataItem = z.object({
 
 const ColorsOption = z.array(z.string()).optional().describe("Custom color palette as hex codes (e.g. ['#FF6384', '#36A2EB']). Uses default palette if omitted.");
 
+// Shared theme parameters for all chart tools
+const ThemeParam = z.string().optional().describe("Theme preset: boardroom, corporate, sales-floor, golden-treasury, clinical, startup, ops-control, tokyo-midnight, zen-garden, consultant, black-tron, black-elegance, black-matrix, forest-amber, forest-earth, sky-light, sky-ocean, sky-twilight, gray-hf, gray-copilot");
+const PaletteParam = z.string().optional().describe("Override palette only (mix-and-match)");
+const TypographyParam = z.string().optional().describe("Override typography: professional, luxury, cyberpunk, editorial, mono, bold, system, techno");
+const EffectsParam = z.string().optional().describe("Override effects: none, subtle, shimmer, neon, energetic");
+
 const PieOptions = z.object({
   donut: z.boolean().optional().describe("Render as donut chart (hollow center). Default: false"),
   showLegend: z.boolean().optional().describe("Show legend. Default: true"),
@@ -59,18 +65,31 @@ const LineOptions = z.object({
 const ScatterPointSchema = z.object({
   x: z.number().describe("X coordinate"),
   y: z.number().describe("Y coordinate"),
+  label: z.string().optional().describe("Label rendered next to the point on the chart"),
+  tooltip: z.string().optional().describe("Custom detail text shown on hover"),
+});
+
+const ReferenceLineSchema = z.object({
+  value: z.number().describe("Position on the axis"),
+  label: z.string().optional().describe("Label for the reference line"),
+  style: z.enum(["solid", "dashed"]).optional().describe("Line style. Default: dashed"),
 });
 
 const ScatterDatasetSchema = z.object({
   label: z.string().describe("Name of this data series"),
-  data: z.array(ScatterPointSchema).describe("Array of {x, y} coordinate pairs"),
+  data: z.array(ScatterPointSchema).describe("Array of {x, y} coordinate pairs with optional labels"),
 });
 
 const ScatterOptions = z.object({
   xLabel: z.string().optional().describe("Label for x-axis"),
   yLabel: z.string().optional().describe("Label for y-axis"),
   showLine: z.boolean().optional().describe("Connect points with lines. Default: false"),
+  showLabels: z.boolean().optional().describe("Show per-point labels on chart. Default: true if any point has a label"),
   colors: ColorsOption,
+  referenceLines: z.object({
+    horizontal: z.array(ReferenceLineSchema).optional().describe("Horizontal reference lines (y-axis values)"),
+    vertical: z.array(ReferenceLineSchema).optional().describe("Vertical reference lines (x-axis values)"),
+  }).optional().describe("Reference lines for context (averages, thresholds, quadrant boundaries)"),
 }).optional();
 
 const CandlestickPointSchema = z.object({
@@ -96,13 +115,65 @@ const KpiSchema = z.object({
 });
 
 const DashboardChart = z.object({
-  type: z.enum(["pie", "bar", "line"]).describe("Chart type"),
+  type: z.enum([
+    "pie", "bar", "line", "hero_ring", "hero",
+    "bullet", "lollipop", "dumbbell", "variance", "funnel",
+    "slope", "waffle", "sparkline", "radial_cluster",
+    "waterfall", "heatmap", "timeline",
+  ]).describe("Chart type"),
   title: z.string().optional(),
   data: z.any().describe("Chart data matching the chart type's data format"),
   labels: z.array(z.string()).optional(),
   datasets: z.array(DatasetSchema).optional(),
   options: z.any().optional(),
+  span: z.number().int().min(1).max(4).optional().describe("Grid column span (1 = default, 2 = full width in 2-col grid)"),
 });
+
+// -- Tool registration helper --
+// Reduces boilerplate for chart tools that follow the standard pattern:
+// themed input -> build chartData -> return text summary + structuredContent
+
+function _registerChartTool(
+  server: McpServer,
+  name: string,
+  meta: { title: string; description: string },
+  inputSchema: Record<string, z.ZodType>,
+  buildResult: (args: Record<string, any>) => { type: string; [key: string]: any },
+  summarize: (args: Record<string, any>) => string,
+): void {
+  registerAppTool(
+    server,
+    name,
+    {
+      title: meta.title,
+      description: meta.description,
+      inputSchema: {
+        ...inputSchema,
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
+      },
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async (args: Record<string, any>): Promise<CallToolResult> => {
+      const chartData = {
+        ...buildResult(args),
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
+      };
+      return {
+        content: [
+          { type: "text", text: summarize(args) },
+          { type: "text", text: JSON.stringify(chartData) },
+        ],
+        structuredContent: chartData,
+      };
+    },
+  );
+}
 
 /**
  * Creates a new MCP Dashboard server instance.
@@ -137,11 +208,15 @@ export function createServer(): McpServer {
     {
       title: "Pie Chart",
       description:
-        "Render an interactive pie or donut chart from key-value data. Provide an array of {label, value} pairs.",
+        "Render an interactive pie or donut chart from key-value data. Provide an array of {label, value} pairs. Supports themes for styled visuals.",
       inputSchema: {
         title: z.string().describe("Chart title"),
         data: z.array(PieDataItem).describe("Array of {label, value} pairs"),
         options: PieOptions,
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -149,12 +224,20 @@ export function createServer(): McpServer {
       title: string;
       data: Array<{ label: string; value: number }>;
       options?: { donut?: boolean; showLegend?: boolean; colors?: string[] };
+      theme?: string;
+      palette?: string;
+      typography?: string;
+      effects?: string;
     }): Promise<CallToolResult> => {
       const chartData = {
         type: "pie" as const,
         title: args.title,
         data: args.data,
         options: args.options ?? {},
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
       };
       const total = args.data.reduce((s, d) => s + d.value, 0);
       const summary = args.data
@@ -178,12 +261,16 @@ export function createServer(): McpServer {
     {
       title: "Bar Chart",
       description:
-        "Render an interactive bar chart. Supports vertical/horizontal, stacked, and multi-series datasets.",
+        "Render an interactive bar chart. Supports vertical/horizontal, stacked, and multi-series datasets. Supports themes for styled visuals.",
       inputSchema: {
         title: z.string().describe("Chart title"),
         labels: z.array(z.string()).describe("Category labels for the x-axis"),
         datasets: z.array(DatasetSchema).describe("One or more data series"),
         options: BarOptions,
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -192,6 +279,10 @@ export function createServer(): McpServer {
       labels: string[];
       datasets: Array<{ label: string; data: (number | null)[] }>;
       options?: { horizontal?: boolean; stacked?: boolean; colors?: string[] };
+      theme?: string;
+      palette?: string;
+      typography?: string;
+      effects?: string;
     }): Promise<CallToolResult> => {
       const chartData = {
         type: "bar" as const,
@@ -199,6 +290,10 @@ export function createServer(): McpServer {
         labels: args.labels,
         datasets: args.datasets,
         options: args.options ?? {},
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
       };
       const summary = args.datasets
         .map((ds) => `${ds.label}: [${ds.data.join(", ")}]`)
@@ -221,12 +316,16 @@ export function createServer(): McpServer {
     {
       title: "Line Chart",
       description:
-        "Render an interactive line or area chart. Supports smooth curves, gradient fill, and multiple series.",
+        "Render an interactive line or area chart. Supports smooth curves, gradient fill, and multiple series. Supports themes for styled visuals.",
       inputSchema: {
         title: z.string().describe("Chart title"),
         labels: z.array(z.string()).describe("X-axis labels (e.g. dates, categories)"),
         datasets: z.array(DatasetSchema).describe("One or more data series"),
         options: LineOptions,
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -235,6 +334,10 @@ export function createServer(): McpServer {
       labels: string[];
       datasets: Array<{ label: string; data: (number | null)[] }>;
       options?: { fill?: boolean; smooth?: boolean; showPoints?: boolean; colors?: string[] };
+      theme?: string;
+      palette?: string;
+      typography?: string;
+      effects?: string;
     }): Promise<CallToolResult> => {
       const chartData = {
         type: "line" as const,
@@ -242,6 +345,10 @@ export function createServer(): McpServer {
         labels: args.labels,
         datasets: args.datasets,
         options: args.options ?? {},
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
       };
       const summary = args.datasets
         .map((ds) => `${ds.label}: [${ds.data.join(", ")}]`)
@@ -257,18 +364,183 @@ export function createServer(): McpServer {
     }
   );
 
+  // -- Tool: render_hero_metric --
+  const GemTypeEnum = z.enum([
+    "diamond", "ruby", "sapphire", "emerald",
+    "golden_pearl", "white_pearl", "black_pearl", "crystal",
+  ]);
+
+  const HeroVariantEnum = z.enum([
+    "big_number", "progress_ring", "status", "comparison",
+    "rank", "countdown", "threshold", "breakdown", "nps", "orb", "gem",
+  ]);
+
+  const SubsystemSchema = z.object({
+    name: z.string(),
+    status: z.enum(["good", "warn", "bad"]),
+  });
+
+  const BreakdownItemSchema = z.object({
+    label: z.string(),
+    value: z.number(),
+    color: z.string().optional(),
+  });
+
+  const CountdownSegmentSchema = z.object({
+    value: z.number(),
+    label: z.string(),
+  });
+
+  const ThresholdZoneSchema = z.object({
+    label: z.string(),
+    from: z.number(),
+    to: z.number(),
+    color: z.string(),
+  });
+
+  registerAppTool(
+    server,
+    "render_hero_metric",
+    {
+      title: "Hero Metric",
+      description: [
+        "Render a purpose-driven hero metric widget. Pick the variant that answers your question:",
+        "- big_number: 'How much? Which direction?' Large value + trend arrow + optional sparkline. Params: value, unit, change, changePeriod, sparkline[]",
+        "- progress_ring: 'How close to goal?' Animated ring or half-gauge. Params: value, unit, label, progress (0-100), style ('ring'|'gauge'), size, color",
+        "- status: 'Good or bad?' Pulsing dot + subsystem badges. Params: label, statusLevel ('good'|'warn'|'bad'), subsystems[{name,status}], count, peak",
+        "- comparison: 'How do we compare?' Before/after + improvement. Params: before, after, improvement, beforeLabel, afterLabel",
+        "- rank: 'Where do I stand?' Badge + percentile. Params: rank, total, percentile, rankChange",
+        "- countdown: 'How long left?' Time segment boxes. Params: segments[{value,label}] OR deadline (ISO date)",
+        "- threshold: 'Above or below limit?' Gradient bar + marker. Params: value, max, threshold, unit, zones[{label,from,to,color}]",
+        "- breakdown: 'What is the split?' Stacked bar + legend. Params: items[{label,value,color?}]",
+        "- nps: 'How satisfied?' Score + rating scale. Params: value, max (default 100), rating ('good'|'neutral'|'bad')",
+        "- orb: 'What is the headline?' Glowing sphere. Params: value, unit, label, color",
+        "- gem: 'Premium gem metric' Faceted/spherical gem. Params: value, unit, label, gemType. gemTypes:",
+        "  diamond='Crown number' (net worth, total revenue) | ruby='What's critical' (urgent, burn rate) | sapphire='Foundation' (stability, uptime)",
+        "  emerald='Growth' (YoY, appreciation) | golden_pearl='Treasure' (gold, commodities) | white_pearl='Clean total' (savings)",
+        "  black_pearl='Rare find' (alt investments, crypto) | crystal='Future' (forecasts, projections)",
+      ].join("\n"),
+      inputSchema: {
+        title: z.string().describe("Chart title"),
+        variant: HeroVariantEnum.optional().describe("Widget variant (default: big_number)"),
+        // Shared
+        value: z.union([z.string(), z.number()]).optional().describe("Main metric value"),
+        unit: z.string().optional().describe("Unit label (e.g. 'grams', '%', 'USD')"),
+        label: z.string().optional().describe("Sub-label"),
+        color: z.string().optional().describe("Override accent color (hex)"),
+        // progress_ring
+        progress: z.number().optional().describe("Ring fill 0-100"),
+        size: z.enum(["sm", "md", "lg", "xl"]).optional().describe("Size: sm/md/lg/xl"),
+        style: z.enum(["ring", "gauge"]).optional().describe("progress_ring style"),
+        // big_number
+        change: z.number().optional().describe("Percentage change"),
+        changePeriod: z.string().optional().describe("Period label for change (e.g. 'vs last month')"),
+        sparkline: z.array(z.number()).optional().describe("Mini bar sparkline data"),
+        // status
+        statusLevel: z.enum(["good", "warn", "bad"]).optional().describe("Status level"),
+        subsystems: z.array(SubsystemSchema).optional().describe("Subsystem badges"),
+        count: z.number().optional().describe("Live count"),
+        peak: z.number().optional().describe("Peak count"),
+        // comparison
+        before: z.union([z.string(), z.number()]).optional().describe("Before value"),
+        after: z.union([z.string(), z.number()]).optional().describe("After value"),
+        improvement: z.union([z.string(), z.number()]).optional().describe("Improvement label"),
+        beforeLabel: z.string().optional().describe("Before column label"),
+        afterLabel: z.string().optional().describe("After column label"),
+        // rank
+        rank: z.number().optional().describe("Current rank"),
+        total: z.number().optional().describe("Total in ranking"),
+        percentile: z.number().optional().describe("Percentile"),
+        rankChange: z.number().optional().describe("Positions moved"),
+        // countdown
+        segments: z.array(CountdownSegmentSchema).optional().describe("Time segments"),
+        deadline: z.string().optional().describe("ISO deadline date"),
+        // threshold
+        max: z.number().optional().describe("Maximum value for threshold/nps"),
+        threshold: z.number().optional().describe("Threshold limit line"),
+        zones: z.array(ThresholdZoneSchema).optional().describe("Color zones"),
+        // breakdown
+        items: z.array(BreakdownItemSchema).optional().describe("Breakdown items"),
+        // nps
+        rating: z.enum(["good", "neutral", "bad"]).optional().describe("NPS rating override"),
+        // gem
+        gemType: GemTypeEnum.optional().describe("Gem type for variant=gem: diamond, ruby, sapphire, emerald, golden_pearl, white_pearl, black_pearl, crystal"),
+        // theme
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
+      },
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async (args): Promise<CallToolResult> => {
+      const chartData = {
+        type: "hero_metric" as const,
+        ...args,
+      };
+
+      const variant = args.variant || "big_number";
+      const summary = `${args.title}: [${variant}] ${args.value ?? ""}${args.unit ? " " + args.unit : ""}`;
+
+      return {
+        content: [
+          { type: "text", text: summary },
+          { type: "text", text: JSON.stringify(chartData) },
+        ],
+        structuredContent: chartData,
+      };
+    }
+  );
+
   // -- Tool: render_dashboard --
+  const HeroSchema = z.object({
+    variant: HeroVariantEnum.optional().describe("Hero variant (default: progress_ring for dashboard)"),
+    value: z.union([z.string(), z.number()]).optional().describe("Hero metric value"),
+    unit: z.string().optional().describe("Unit label"),
+    label: z.string().optional().describe("Sub-label"),
+    progress: z.number().optional().describe("Ring fill 0-100"),
+    color: z.string().optional().describe("Override accent color"),
+    size: z.enum(["sm", "md", "lg", "xl"]).optional().describe("Size"),
+    // Allow all variant-specific fields
+    change: z.number().optional(),
+    statusLevel: z.enum(["good", "warn", "bad"]).optional(),
+    subsystems: z.array(SubsystemSchema).optional(),
+    count: z.number().optional(),
+    before: z.union([z.string(), z.number()]).optional(),
+    after: z.union([z.string(), z.number()]).optional(),
+    improvement: z.union([z.string(), z.number()]).optional(),
+    rank: z.number().optional(),
+    total: z.number().optional(),
+    percentile: z.number().optional(),
+    rankChange: z.number().optional(),
+    items: z.array(BreakdownItemSchema).optional(),
+    gemType: GemTypeEnum.optional(),
+  });
+
+  const FooterSchema = z.object({
+    text: z.string().optional().describe("Footer text"),
+    lastUpdated: z.string().optional().describe("Timestamp string to display"),
+  });
+
   registerAppTool(
     server,
     "render_dashboard",
     {
       title: "Dashboard",
       description:
-        "Render a full dashboard with KPI cards and multiple charts in a responsive grid layout.",
+        "Render a full dashboard with KPI cards, charts, and optional hero metric in a responsive grid. Available themes: boardroom (investors, board decks), corporate (enterprise daily use), sales-floor (quota tracking, leaderboards), golden-treasury (wealth, luxury real estate), clinical (healthcare, compliance - WCAG AAA), startup (SaaS metrics, YC demos), ops-control (DevOps, manufacturing), tokyo-midnight (crypto, trading, gaming), zen-garden (wellness, sustainability), consultant (agency deliverables, presentations). Mix-and-match: set palette + typography + effects independently.",
       inputSchema: {
         title: z.string().describe("Dashboard title"),
         kpis: z.array(KpiSchema).optional().describe("KPI metrics shown as cards at the top"),
         charts: z.array(DashboardChart).describe("Array of charts to display in the grid"),
+        columns: z.number().int().min(1).max(4).optional().describe("Number of grid columns (1-4). Default: auto-fill based on available width"),
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
+        hero: z.union([HeroSchema, z.array(HeroSchema)]).optional().describe("Hero metric(s) - single object or array for multi-hero row"),
+        footer: FooterSchema.optional().describe("Footer bar with text and/or timestamp"),
+        layout: z.enum(["default", "hero-center", "kpi-top"]).optional().describe("Layout variant: default (hero above KPIs), hero-center (hero prominent), kpi-top (KPIs first)"),
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -288,21 +560,43 @@ export function createServer(): McpServer {
         labels?: string[];
         datasets?: Array<{ label: string; data: (number | null)[] }>;
         options?: unknown;
+        span?: number;
       }>;
+      columns?: number;
+      theme?: string;
+      palette?: string;
+      typography?: string;
+      effects?: string;
+      hero?: Record<string, any> | Array<Record<string, any>>;
+      footer?: { text?: string; lastUpdated?: string };
+      layout?: "default" | "hero-center" | "kpi-top";
     }): Promise<CallToolResult> => {
       const chartData = {
         type: "dashboard" as const,
         title: args.title,
         kpis: args.kpis ?? [],
         charts: args.charts,
+        columns: args.columns,
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
+        hero: args.hero,
+        footer: args.footer,
+        layout: args.layout,
       };
       const parts: string[] = [`Dashboard: ${args.title}`];
+      if (args.theme) parts.push(`Theme: ${args.theme}`);
       if (args.kpis) {
         parts.push(
           `KPIs: ${args.kpis.map((k) => `${k.label}=${k.prefix ?? ""}${k.value}${k.suffix ?? ""}`).join(", ")}`
         );
       }
       parts.push(`Charts: ${args.charts.length} widgets`);
+      if (args.hero) {
+        const heroCount = Array.isArray(args.hero) ? args.hero.length : 1;
+        parts.push(`Hero: ${heroCount} widget${heroCount > 1 ? "s" : ""}`);
+      }
 
       return {
         content: [
@@ -321,11 +615,15 @@ export function createServer(): McpServer {
     {
       title: "Scatter Chart",
       description:
-        "Render an interactive scatter plot with x/y coordinate data. Supports multiple series and optional connecting lines.",
+        "Render an interactive scatter plot with x/y coordinate data. Supports multiple series and optional connecting lines. Supports themes for styled visuals.",
       inputSchema: {
         title: z.string().describe("Chart title"),
         datasets: z.array(ScatterDatasetSchema).describe("One or more data series with {x, y} points"),
         options: ScatterOptions,
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -335,6 +633,10 @@ export function createServer(): McpServer {
         title: args.title,
         datasets: args.datasets,
         options: args.options ?? {},
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
       };
       const summary = args.datasets
         .map((ds) => `${ds.label}: ${ds.data.length} points`)
@@ -357,11 +659,15 @@ export function createServer(): McpServer {
     {
       title: "Candlestick Chart",
       description:
-        "Render an interactive candlestick or OHLC financial chart. Provide date/OHLC data for stock prices, crypto, forex, or any time-series financial data.",
+        "Render an interactive candlestick or OHLC financial chart. Provide date/OHLC data for stock prices, crypto, forex, or any time-series financial data. Supports themes for styled visuals.",
       inputSchema: {
         title: z.string().describe("Chart title"),
         data: z.array(CandlestickPointSchema).describe("Array of {date, o, h, l, c} OHLC data points"),
         options: CandlestickOptions,
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -371,6 +677,10 @@ export function createServer(): McpServer {
         title: args.title,
         data: args.data,
         options: args.options ?? {},
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
       };
       const first = args.data[0];
       const last = args.data[args.data.length - 1];
@@ -393,7 +703,7 @@ export function createServer(): McpServer {
     {
       title: "Data Table",
       description:
-        "Render a sortable, interactive data table. Click column headers to sort.",
+        "Render a sortable, interactive data table. Click column headers to sort. Supports themes for styled visuals.",
       inputSchema: {
         title: z.string().describe("Table title"),
         columns: z.array(z.string()).describe("Column names in display order"),
@@ -404,6 +714,10 @@ export function createServer(): McpServer {
           sortable: z.boolean().optional().describe("Enable column sorting. Default: true"),
           striped: z.boolean().optional().describe("Alternating row colors. Default: false"),
         }).optional(),
+        theme: ThemeParam,
+        palette: PaletteParam,
+        typography: TypographyParam,
+        effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
@@ -414,6 +728,10 @@ export function createServer(): McpServer {
         columns: args.columns,
         rows: args.rows,
         options: args.options ?? {},
+        theme: args.theme,
+        palette: args.palette,
+        typography: args.typography,
+        effects: args.effects,
       };
 
       return {
@@ -554,6 +872,286 @@ export function createServer(): McpServer {
       }
     }
   );
+
+  // -- New chart tools (Phase 2) --
+
+  _registerChartTool(server, "render_bullet_chart", {
+    title: "Bullet Chart",
+    description: "Render bullet charts - 'Are we hitting target?' Horizontal bars with qualitative zones and a target marker. Supports 2-8 zones with optional labels and colors. Great for KPI vs target, seniority bands, maturity models.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      actual: z.number().describe("Current value"),
+      target: z.number().describe("Target value"),
+      zones: z.array(z.number()).min(2).max(8).optional().describe("Zone thresholds from low to high (2-8 values). Default: 3 equal zones"),
+      unit: z.string().optional(),
+      subtitle: z.string().optional().describe("Second line below label (e.g., '8.3 yrs')"),
+      tooltip: z.string().optional().describe("Detail text shown on hover"),
+    })).describe("Array of bullet items"),
+    zoneLabels: z.array(z.string()).optional().describe("Labels for each zone band. Length should be zones+1 (e.g., 5 thresholds = 6 labels)"),
+    zoneColors: z.array(z.string()).optional().describe("Custom colors per zone band. Defaults to red-to-green gradient"),
+  }, (args) => ({
+    type: "bullet",
+    title: args.title,
+    data: args.data,
+    zoneLabels: args.zoneLabels,
+    zoneColors: args.zoneColors,
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.map((d: any) => `${d.label} ${d.actual}/${d.target}`).join(", ")}`;
+  });
+
+  _registerChartTool(server, "render_lollipop_chart", {
+    title: "Lollipop Chart",
+    description: "Render a lollipop chart - 'How do segments compare?' Horizontal lines with dots at the value. Supports optional target markers for benchmarking. Clean alternative to bar charts for ranked data.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      value: z.number(),
+      color: z.string().optional(),
+      target: z.number().optional().describe("Target/benchmark value shown as a dashed marker"),
+      tooltip: z.string().optional().describe("Detail text shown on hover"),
+    })).describe("Array of {label, value} items"),
+  }, (args) => ({
+    type: "lollipop",
+    title: args.title,
+    data: args.data,
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.map((d: any) => `${d.label}: ${d.value}`).join(", ")}`;
+  });
+
+  _registerChartTool(server, "render_dumbbell_chart", {
+    title: "Dumbbell Chart",
+    description: "Render a dumbbell chart - 'How big is the gap?' Before/after dots connected by a bar. Supports scale labels and background zones for absolute positioning context.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      before: z.number(),
+      after: z.number(),
+      tooltip: z.string().optional().describe("Detail text shown on hover"),
+    })).describe("Array of {label, before, after} items"),
+    beforeLabel: z.string().optional().describe("Label for 'before' column (default: Before)"),
+    afterLabel: z.string().optional().describe("Label for 'after' column (default: After)"),
+    unit: z.string().optional().describe("Unit suffix"),
+    scaleLabels: z.record(z.string(), z.string()).optional().describe("Labels at scale positions, e.g. {'40': 'Engineer', '65': 'Sr. Engineer'}"),
+    zones: z.array(z.number()).min(2).max(8).optional().describe("Background zone thresholds (same as bullet chart zones)"),
+    zoneColors: z.array(z.string()).optional().describe("Custom colors per zone band"),
+    zoneLabels: z.array(z.string()).optional().describe("Labels for each zone band"),
+  }, (args) => ({
+    type: "dumbbell",
+    title: args.title,
+    data: args.data,
+    beforeLabel: args.beforeLabel,
+    afterLabel: args.afterLabel,
+    unit: args.unit,
+    scaleLabels: args.scaleLabels,
+    zones: args.zones,
+    zoneColors: args.zoneColors,
+    zoneLabels: args.zoneLabels,
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.length} items comparing ${args.beforeLabel || "before"} vs ${args.afterLabel || "after"}`;
+  });
+
+  _registerChartTool(server, "render_variance_chart", {
+    title: "Variance Chart",
+    description: "Render a variance chart - 'Over or under budget?' Bars showing actual vs budget with color-coded over/under indicators.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      budget: z.number(),
+      actual: z.number(),
+    })).describe("Array of {label, budget, actual} items"),
+    unit: z.string().optional().describe("Unit suffix (e.g. '$', 'k')"),
+  }, (args) => ({
+    type: "variance",
+    title: args.title,
+    data: args.data,
+    unit: args.unit,
+  }), (args) => {
+    const items = args.data as any[];
+    const over = items.filter((d: any) => d.actual > d.budget).length;
+    return `${args.title}: ${items.length} items, ${over} over budget`;
+  });
+
+  _registerChartTool(server, "render_funnel_chart", {
+    title: "Funnel Chart",
+    description: "Render a funnel chart - 'Where do we lose people?' Width-proportional bars showing conversion stages with optional conversion percentages between stages.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      value: z.number(),
+      color: z.string().optional(),
+    })).describe("Array of funnel stages (top to bottom)"),
+    showConversion: z.boolean().optional().describe("Show conversion % between stages (default: true)"),
+  }, (args) => ({
+    type: "funnel",
+    title: args.title,
+    data: args.data,
+    showConversion: args.showConversion,
+  }), (args) => {
+    const items = args.data as any[];
+    const first = items[0]?.value || 0;
+    const last = items[items.length - 1]?.value || 0;
+    const rate = first > 0 ? ((last / first) * 100).toFixed(1) : "0";
+    return `${args.title}: ${items.length} stages, ${rate}% overall conversion`;
+  });
+
+  _registerChartTool(server, "render_slope_chart", {
+    title: "Slope Chart",
+    description: "Render a slope chart - 'How did rankings change?' SVG lines connecting two time periods showing relative position changes.",
+  }, {
+    title: z.string().describe("Chart title"),
+    periodStart: z.string().describe("Label for start period (e.g. '2024')"),
+    periodEnd: z.string().describe("Label for end period (e.g. '2025')"),
+    data: z.array(z.object({
+      label: z.string(),
+      start: z.number(),
+      end: z.number(),
+      color: z.string().optional(),
+    })).describe("Array of {label, start, end} items"),
+  }, (args) => ({
+    type: "slope",
+    title: args.title,
+    periodStart: args.periodStart,
+    periodEnd: args.periodEnd,
+    data: args.data,
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.length} series, ${args.periodStart} to ${args.periodEnd}`;
+  });
+
+  _registerChartTool(server, "render_waffle_chart", {
+    title: "Waffle Chart",
+    description: "Render a waffle chart - 'What is the composition?' 10x10 grid of colored squares showing proportional composition. Values should sum to 100.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      value: z.number().describe("Percentage (all values should sum to ~100)"),
+      color: z.string().optional(),
+    })).describe("Array of {label, value} composition items"),
+  }, (args) => ({
+    type: "waffle",
+    title: args.title,
+    data: args.data,
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.map((d: any) => `${d.label} ${d.value}%`).join(", ")}`;
+  });
+
+  _registerChartTool(server, "render_sparkline_chart", {
+    title: "Sparkline Cards",
+    description: "Render sparkline cards - 'What is the trend story?' Cards with mini SVG sparklines, current value, and change indicator. Great for metric overview grids.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      value: z.union([z.string(), z.number()]).describe("Current value"),
+      change: z.string().optional().describe("Change text (e.g. '+12%', '-3.2%')"),
+      sparkline: z.array(z.number()).describe("Array of values for the sparkline"),
+      good: z.boolean().optional().describe("Is the trend good? (default: true)"),
+    })).describe("Array of sparkline card items"),
+  }, (args) => ({
+    type: "sparkline",
+    title: args.title,
+    data: args.data,
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.map((d: any) => `${d.label}: ${d.value}`).join(", ")}`;
+  });
+
+  _registerChartTool(server, "render_radial_cluster", {
+    title: "Radial Cluster",
+    description: "Render a radial cluster - 'Multi-metric health check?' Multiple small ring gauges showing percentage metrics with status colors. Optional alert message.",
+  }, {
+    title: z.string().describe("Chart title"),
+    metrics: z.array(z.object({
+      label: z.string(),
+      value: z.number().describe("Percentage 0-100"),
+      status: z.enum(["good", "warn", "bad"]).optional().describe("Status color"),
+    })).describe("Array of ring metrics"),
+    alert: z.string().optional().describe("Alert message below rings"),
+  }, (args) => ({
+    type: "radial_cluster",
+    title: args.title,
+    metrics: args.metrics,
+    alert: args.alert,
+  }), (args) => {
+    const metrics = args.metrics as any[];
+    return `${args.title}: ${metrics.map((m: any) => `${m.label} ${m.value}%`).join(", ")}`;
+  });
+
+  _registerChartTool(server, "render_waterfall_chart", {
+    title: "Waterfall Chart",
+    description: "Render a waterfall chart - 'What drove the change?' Cascading bars showing how individual items add up or subtract to reach a total. Auto-infers add/sub/total if type omitted.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string(),
+      value: z.number(),
+      type: z.enum(["total", "add", "sub"]).optional().describe("Bar type (auto-inferred if omitted: first/last=total, positive=add, negative=sub)"),
+    })).describe("Array of waterfall items"),
+    unit: z.string().optional().describe("Unit suffix (e.g. '$', 'k')"),
+  }, (args) => ({
+    type: "waterfall",
+    title: args.title,
+    data: args.data,
+    unit: args.unit,
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.length} items${args.unit ? ` (${args.unit})` : ""}`;
+  });
+
+  _registerChartTool(server, "render_heatmap_chart", {
+    title: "Heatmap",
+    description: "Render a heatmap - 'When are patterns strongest?' Color-coded grid of values across rows and columns. Supports color scales: default (blue-purple-orange), red-green, blue, heat.",
+  }, {
+    title: z.string().describe("Chart title"),
+    rows: z.array(z.string()).describe("Row labels"),
+    columns: z.array(z.string()).describe("Column labels"),
+    values: z.array(z.array(z.number())).describe("2D array of values [row][column]"),
+    colorScale: z.string().optional().describe("Color scale: default, red-green, blue, heat"),
+  }, (args) => ({
+    type: "heatmap",
+    title: args.title,
+    rows: args.rows,
+    columns: args.columns,
+    values: args.values,
+    colorScale: args.colorScale,
+  }), (args) => {
+    const rows = args.rows as string[];
+    const columns = args.columns as string[];
+    return `${args.title}: ${rows.length} rows x ${columns.length} columns`;
+  });
+
+  _registerChartTool(server, "render_timeline_chart", {
+    title: "Timeline",
+    description: "Render a timeline - 'Where are we in the process?' Progress dots on a vertical track with status colors (done, active, pending, blocked). Great for project milestones.",
+  }, {
+    title: z.string().describe("Chart title"),
+    subtitle: z.string().optional().describe("Subtitle text"),
+    milestones: z.array(z.object({
+      label: z.string(),
+      status: z.enum(["done", "active", "pending", "blocked"]).describe("Milestone status"),
+      date: z.string().optional().describe("Date or time label"),
+    })).describe("Array of milestone items"),
+  }, (args) => ({
+    type: "timeline",
+    title: args.title,
+    subtitle: args.subtitle,
+    milestones: args.milestones,
+  }), (args) => {
+    const ms = args.milestones as any[];
+    const done = ms.filter((m: any) => m.status === "done").length;
+    return `${args.title}: ${done}/${ms.length} milestones done`;
+  });
 
   return server;
 }

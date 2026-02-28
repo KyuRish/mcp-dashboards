@@ -1,4 +1,5 @@
-import { escapeHtml, sendClickMessage, addCsvExportButton } from "./shared.js";
+import { escapeHtml, sendClickMessage, addCsvExportButton, registerChart } from "./shared.js";
+import { resolveTheme, applyTheme } from "../themes.js";
 
 export interface TableData {
   title: string;
@@ -8,6 +9,10 @@ export interface TableData {
     sortable?: boolean;
     striped?: boolean;
   };
+  theme?: string;
+  palette?: string;
+  typography?: string;
+  effects?: string;
 }
 
 const STYLE_ID = "mcp-table-styles";
@@ -167,6 +172,14 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
   const sortable = options.sortable !== false; // default true
   const striped = options.striped === true;
 
+  // Apply theme if specified
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
+
   injectStyles(container);
 
   const rowCount = rows.length;
@@ -214,7 +227,7 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
       <div class="card chart-card">
         <div class="chart-card__header">
           <div>
-            <div class="chart-card__title">${escapeHtml(title)}</div>
+            <div class="chart-card__title${theme?.effects.shimmerTitle ? " shimmer-text" : ""}">${escapeHtml(title)}</div>
             <div class="chart-card__subtitle tbl-meta">${subtitle}</div>
           </div>
         </div>
@@ -330,3 +343,5 @@ export function renderTable(container: HTMLElement, payload: TableData): void {
     });
   });
 }
+
+registerChart("table", "render_table", renderTable);

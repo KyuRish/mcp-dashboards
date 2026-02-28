@@ -1,14 +1,29 @@
 import { App } from "@modelcontextprotocol/ext-apps";
-import { renderPieChart } from "./charts/pie.js";
-import { renderBarChart } from "./charts/bar.js";
-import { renderLineChart } from "./charts/line.js";
-import { renderDashboard } from "./charts/dashboard.js";
-import { renderScatterChart } from "./charts/scatter.js";
-import { renderCandlestickChart } from "./charts/candlestick.js";
-import { renderTable } from "./charts/table.js";
-import { renderAutoChart } from "./charts/auto.js";
-import { setAppInstance, storeLastToolCall, getLastToolCall, getAppInstance } from "./charts/shared.js";
+import { setAppInstance, storeLastToolCall, getLastToolCall, getAppInstance, getChartEntry, getTypeToToolMap } from "./charts/shared.js";
 import "./styles.css";
+
+// Side-effect imports: each chart file self-registers via registerChart()
+import "./charts/pie.js";
+import "./charts/bar.js";
+import "./charts/line.js";
+import "./charts/scatter.js";
+import "./charts/candlestick.js";
+import "./charts/dashboard.js";
+import "./charts/table.js";
+import "./charts/auto.js";
+import "./charts/hero.js";
+import "./charts/bullet.js";
+import "./charts/lollipop.js";
+import "./charts/dumbbell.js";
+import "./charts/variance.js";
+import "./charts/funnel.js";
+import "./charts/slope.js";
+import "./charts/waffle.js";
+import "./charts/sparkline.js";
+import "./charts/radial-cluster.js";
+import "./charts/waterfall.js";
+import "./charts/heatmap.js";
+import "./charts/timeline.js";
 
 const root = document.getElementById("app")!;
 
@@ -57,33 +72,11 @@ function renderFromData(data: any): void {
   }
 
   try {
-    switch (data.type) {
-      case "pie":
-        renderPieChart(root, data);
-        break;
-      case "bar":
-        renderBarChart(root, data);
-        break;
-      case "line":
-        renderLineChart(root, data);
-        break;
-      case "scatter":
-        renderScatterChart(root, data);
-        break;
-      case "candlestick":
-        renderCandlestickChart(root, data);
-        break;
-      case "dashboard":
-        renderDashboard(root, data);
-        break;
-      case "table":
-        renderTable(root, data);
-        break;
-      case "auto":
-        renderAutoChart(root, data);
-        break;
-      default:
-        root.innerHTML = `<div class="loading">Unknown chart type: ${data.type}</div>`;
+    const entry = getChartEntry(data.type);
+    if (entry) {
+      entry.render(root, data);
+    } else {
+      root.innerHTML = `<div class="loading">Unknown chart type: ${data.type}</div>`;
     }
     reportSize();
   } catch (err) {
@@ -92,18 +85,6 @@ function renderFromData(data: any): void {
     reportSize();
   }
 }
-
-// Map structuredContent.type to server tool names
-const TYPE_TO_TOOL: Record<string, string> = {
-  pie: "render_pie_chart",
-  bar: "render_bar_chart",
-  line: "render_line_chart",
-  scatter: "render_scatter_chart",
-  candlestick: "render_candlestick_chart",
-  dashboard: "render_dashboard",
-  table: "render_table",
-  auto: "render_from_json",
-};
 
 // ontoolinput only provides arguments (no tool name per spec).
 // We store the args here and resolve the tool name from the result's type.
@@ -130,7 +111,8 @@ app.ontoolresult = (result) => {
 
   // Store for refresh: resolve tool name from content type + pending args
   if (data?.type && _pendingArgs) {
-    const toolName = TYPE_TO_TOOL[data.type];
+    const toolMap = getTypeToToolMap();
+    const toolName = toolMap[data.type];
     if (toolName) {
       storeLastToolCall(toolName, _pendingArgs);
     }
