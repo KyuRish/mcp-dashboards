@@ -8,16 +8,26 @@ import {
   PointElement,
   PieController,
   DoughnutController,
+  RadarController,
+  RadialLinearScale,
   CategoryScale,
   LinearScale,
   Filler,
   Tooltip,
   Legend,
 } from "chart.js";
+import { TreemapController, TreemapElement } from "chartjs-chart-treemap";
+import { SankeyController, Flow } from "chartjs-chart-sankey";
+import { WordCloudController, WordElement } from "chartjs-chart-wordcloud";
+import { BoxPlotController, BoxAndWiskers, ViolinController, Violin as ViolinElement } from "@sgratzl/chartjs-chart-boxplot";
+import { ChoroplethController, BubbleMapController, GeoFeature, ColorScale, SizeScale, ProjectionScale } from "chartjs-chart-geo";
+import { feature } from "topojson-client";
+import worldAtlas from "world-atlas/countries-110m.json";
 import html2canvas from "html2canvas-pro";
-import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast, resolveShimmerForExport, addCanvasZoom } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 import { renderHeroRing, renderHeroWidget } from "./hero.js";
+import { ALPHA2_TO_NUMERIC, NUMERIC_TO_ALPHA2, COLOR_SCALES } from "./geo.js";
 
 Chart.register(
   ArcElement,
@@ -28,6 +38,24 @@ Chart.register(
   PointElement,
   PieController,
   DoughnutController,
+  RadarController,
+  RadialLinearScale,
+  TreemapController,
+  TreemapElement,
+  SankeyController,
+  Flow,
+  WordCloudController,
+  WordElement,
+  BoxPlotController,
+  BoxAndWiskers,
+  ViolinController,
+  ViolinElement,
+  ChoroplethController,
+  BubbleMapController,
+  GeoFeature,
+  ColorScale,
+  SizeScale,
+  ProjectionScale,
   CategoryScale,
   LinearScale,
   Filler,
@@ -41,6 +69,7 @@ interface KPI {
   change?: number;
   prefix?: string;
   suffix?: string;
+  sparkline?: number[];
 }
 
 interface DashboardChart {
@@ -145,7 +174,7 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
     ? `<div class="dashboard-hero" id="dash-hero"></div>`
     : "";
 
-  const canvasTypes = new Set(["pie", "bar", "line"]);
+  const canvasTypes = new Set(["pie", "bar", "line", "radar", "treemap", "sankey", "wordcloud", "boxplot", "geo", "bubble_map"]);
   const heroTypes = new Set(["hero_ring", "hero"]);
 
   const chartsHtml = charts
@@ -223,7 +252,15 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
         </div>
         <div class="header__right">
           <span class="header__meta">${new Date().toLocaleDateString(undefined, { dateStyle: "medium" })}</span>
-          <button class="export-btn" id="dash-download" title="Download all charts as PNG">${downloadSvg}</button>
+          <div class="export-dropdown" id="dash-download-wrap">
+            <button class="export-btn" id="dash-download" title="Download as PNG">${downloadSvg}</button>
+            <div class="export-dropdown__menu">
+              <button data-mode="full">Full Image</button>
+              <button data-mode="ppt-title">PPT Title Slide</button>
+              <button data-mode="ppt-bg">PPT Background</button>
+              <button data-mode="document">Document (A4)</button>
+            </div>
+          </div>
           <button class="export-btn" id="dash-refresh" title="Refresh data">${refreshSvg}</button>
         </div>
       </div>
@@ -234,86 +271,25 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
     </div>
   `;
 
-  // Overall dashboard download - clone off-screen, prep the clone, screenshot it
-  container.querySelector("#dash-download")?.addEventListener("click", async () => {
-    const dashEl = container.querySelector<HTMLElement>(".dashboard");
-    if (!dashEl) return;
+  // Export dropdown wiring
+  const dashEl = container.querySelector<HTMLElement>(".dashboard")!;
+  const downloadBtn = container.querySelector<HTMLElement>("#dash-download");
+  const downloadMenu = container.querySelector<HTMLElement>(".export-dropdown__menu");
 
-    // Clone the dashboard so the live DOM is never touched
-    const clone = dashEl.cloneNode(true) as HTMLElement;
-
-    // Match exact dimensions of the original (scrollWidth captures overflow that getBoundingClientRect misses)
-    const fullW = Math.max(dashEl.getBoundingClientRect().width, dashEl.scrollWidth);
-    clone.style.cssText = `position:fixed;left:-99999px;top:0;width:${fullW}px;pointer-events:none;`;
-    document.body.appendChild(clone);
-
-    // 1. Swap cloned canvases to <img> (cloned canvases lose pixel data)
-    const origCanvases = dashEl.querySelectorAll<HTMLCanvasElement>(".chart-card__body canvas");
-    const cloneCanvases = clone.querySelectorAll<HTMLCanvasElement>(".chart-card__body canvas");
-    cloneCanvases.forEach((cv, i) => {
-      const img = document.createElement("img");
-      img.src = origCanvases[i].toDataURL();
-      img.style.cssText = `position:absolute;inset:0;width:100%;height:100%;`;
-      cv.parentElement!.appendChild(img);
-      cv.style.display = "none";
-    });
-
-    // 2. Freeze animations/transitions (no blanket transform/opacity kill)
-    const overrideStyle = document.createElement("style");
-    overrideStyle.textContent = [
-      `[data-mcp-clone] *,[data-mcp-clone] *::before,[data-mcp-clone] *::after{animation:none!important;transition:none!important;}`,
-      `[data-mcp-clone] .card,[data-mcp-clone] .chart-wrapper{opacity:1!important;}`,
-      `[data-mcp-clone] .card::before{display:none!important;}`,
-    ].join("");
-    clone.setAttribute("data-mcp-clone", "");
-    document.head.appendChild(overrideStyle);
-
-    // 3. Resolve color-mix() to inline rgba() (browser returns color(srgb) which html2canvas can't parse)
-    const accent = getComputedStyle(dashEl).getPropertyValue("--accent").trim() || "#6366f1";
-
-    clone.querySelectorAll<HTMLElement>(".hero-orb").forEach(orb => {
-      const c = orb.style.getPropertyValue("--orb-color").trim() || accent;
-      const aura = orb.querySelector<HTMLElement>(".hero-orb__aura");
-      if (aura) {
-        aura.style.background = `radial-gradient(circle at 50% 50%, ${_rgba(c, 50)} 0%, ${_rgba(c, 30)} 30%, ${_rgba(c, 12)} 55%, transparent 70%)`;
-      }
-      const sphere = orb.querySelector<HTMLElement>(".hero-orb__sphere");
-      if (sphere) {
-        sphere.style.background = `radial-gradient(circle at 45% 45%, ${c} 0%, ${_mixBlack(c, 60)} 40%, ${_rgba(c, 25)} 70%, ${_rgba(c, 10)} 100%)`;
-        sphere.style.boxShadow = `0 0 25px ${c}, 0 0 60px ${_rgba(c, 50)}, inset 0 0 40px rgba(255,255,255,0.08), inset 0 0 70px ${_mixBlack(c, 40)}`;
-      }
-    });
-
-    clone.querySelectorAll<HTMLElement>('.hero-gem[data-gem-bg="dark"] .hero-gem__text').forEach(el => {
-      el.style.color = _mixTwo("#f0f0ff", 88, accent);
-    });
-    clone.querySelectorAll<HTMLElement>('.hero-gem[data-gem-bg="light"] .hero-gem__text').forEach(el => {
-      el.style.color = _mixTwo("#1a1a2e", 85, accent);
-    });
-
-    // 4. Hide action buttons in the clone
-    clone.querySelectorAll<HTMLElement>(".header__right .export-btn, .chart-card__actions").forEach((el) => {
-      el.style.display = "none";
-    });
-
-    try {
-      const canvas = await html2canvas(clone, {
-        backgroundColor: getCSSVar("--bg-base") || "#0D1117",
-        scale: window.devicePixelRatio || 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: fullW,
-        windowHeight: clone.scrollHeight,
-      });
-      await saveCanvasViaServer(canvas, title);
-    } catch (e: any) {
-      console.error("Screenshot failed:", e);
-      showToast(`Export failed: ${e.message}`, true);
-    } finally {
-      clone.remove();
-      overrideStyle.remove();
-    }
+  downloadBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadMenu?.classList.toggle("open");
   });
+
+  downloadMenu?.querySelectorAll<HTMLElement>("button[data-mode]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      downloadMenu?.classList.remove("open");
+      const mode = btn.dataset.mode as "full" | "ppt-title" | "ppt-bg" | "document";
+      await _exportDashboard(dashEl, title, mode);
+    });
+  });
+
+  document.addEventListener("click", () => downloadMenu?.classList.remove("open"));
 
   // Overall dashboard refresh
   const refreshBtn = container.querySelector<HTMLElement>("#dash-refresh");
@@ -391,6 +367,7 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
   // Render each chart after DOM is ready
   requestAnimationFrame(() => {
     charts.forEach((c, i) => {
+      try {
       // Handle hero_ring / hero widget type
       if (heroTypes.has(c.type)) {
         const heroWidgetEl = container.querySelector<HTMLElement>(`#dash-hero-widget-${i}`);
@@ -436,6 +413,7 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
         const payload = { type: c.type, title: c.title ?? "", ...c.data as object, ...(c as Record<string, unknown>) };
         entry.render(cssEl, payload);
       }
+      } catch (err) { console.error(`Dashboard chart ${i} (${c.type}) failed:`, err); }
     });
   });
 
@@ -446,6 +424,14 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
     function applyMasonry(grid: HTMLElement): void {
       const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
       const items = grid.querySelectorAll<HTMLElement>(':scope > .card, :scope > [id^="dash-css-chart-"]');
+
+      // Clamp column spans to actual column count to prevent overflow
+      const cols = getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+      items.forEach(card => {
+        const colSpan = parseInt(card.style.gridColumn?.replace("span ", "") || "1", 10);
+        if (colSpan > cols) card.style.gridColumn = `span ${cols}`;
+      });
+
       items.forEach(card => { card.style.gridRowEnd = ""; });
       grid.offsetHeight; // force reflow to measure natural heights
       items.forEach(card => {
@@ -463,14 +449,43 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
   }
 }
 
+function buildKpiSparkSVG(data: number[], color: string): string {
+  if (data.length < 2) return "";
+  const w = 100;
+  const h = 20;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / range) * (h - 2) - 1;
+    return `${x},${y}`;
+  });
+
+  const linePath = `M${points.join(" L")}`;
+  const areaPath = `${linePath} L${w},${h} L0,${h} Z`;
+
+  return `
+    <svg class="kpi__sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <path d="${areaPath}" fill="${color}" opacity="0.15" />
+      <path d="${linePath}" stroke="${color}" stroke-width="1.5" fill="none" />
+    </svg>
+  `;
+}
+
 function buildKpiCard(kpi: KPI, index: number): string {
   const val = `${kpi.prefix ?? ""}${typeof kpi.value === "number" ? kpi.value.toLocaleString() : kpi.value}${kpi.suffix ?? ""}`;
 
   let trendHtml = "";
+  let sparkHtml = "";
   if (kpi.change !== undefined) {
     const dir = kpi.change > 0 ? "up" : kpi.change < 0 ? "down" : "flat";
     const arrow = kpi.change > 0 ? "\u25B2" : kpi.change < 0 ? "\u25BC" : "\u25CF";
     const cls = kpi.change > 0 ? "card--positive" : kpi.change < 0 ? "card--negative" : "card--neutral";
+    const sparkColor = kpi.change > 0
+      ? "var(--positive)" : kpi.change < 0
+      ? "var(--negative)" : "var(--accent)";
 
     trendHtml = `
       <div class="kpi__trend">
@@ -481,19 +496,30 @@ function buildKpiCard(kpi: KPI, index: number): string {
       </div>
     `;
 
+    if (kpi.sparkline && kpi.sparkline.length >= 2) {
+      sparkHtml = buildKpiSparkSVG(kpi.sparkline, sparkColor);
+    }
+
     return `
       <div class="card kpi ${cls}" data-kpi-index="${index}" style="animation-delay: ${index * 0.08 + 0.05}s">
         <span class="kpi__label">${escapeHtml(kpi.label)}</span>
         <span class="kpi__value">${val}</span>
         ${trendHtml}
+        ${sparkHtml}
       </div>
     `;
+  }
+
+  // No change - static KPI (sparkline without change still gets accent color)
+  if (kpi.sparkline && kpi.sparkline.length >= 2) {
+    sparkHtml = buildKpiSparkSVG(kpi.sparkline, "var(--accent)");
   }
 
   return `
     <div class="card kpi card--accent" data-kpi-index="${index}" style="animation-delay: ${index * 0.08 + 0.05}s">
       <span class="kpi__label">${escapeHtml(kpi.label)}</span>
       <span class="kpi__value">${val}</span>
+      ${sparkHtml}
     </div>
   `;
 }
@@ -517,6 +543,9 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
           borderColor: getCSSVar("--bg-card"),
           borderWidth: 2,
           hoverOffset: 6,
+          spacing: 2,
+          hoverBorderWidth: 2,
+          hoverBorderColor: getCSSVar("--text-primary"),
         }],
       },
       options: {
@@ -565,15 +594,20 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
       type: "bar",
       data: {
         labels,
-        datasets: datasets.map((ds, i) => ({
-          label: ds.label,
-          data: ds.data,
-          backgroundColor: palette[i % palette.length] + "CC",
-          borderColor: palette[i % palette.length],
-          borderWidth: 1,
-          borderRadius: 4,
-          borderSkipped: false,
-        })),
+        datasets: datasets.map((ds: any, i: number) => {
+          const base = palette[i % palette.length];
+          const bg = ds.colors ? ds.colors.map((c: string) => c + "CC") : base + "CC";
+          const border = ds.colors ?? base;
+          return {
+            label: ds.label,
+            data: ds.data,
+            backgroundColor: bg,
+            borderColor: border,
+            borderWidth: 1,
+            borderRadius: 4,
+            borderSkipped: false,
+          };
+        }),
       },
       options: {
         indexAxis: isHorizontal ? "y" : "x",
@@ -662,7 +696,750 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
     deferResize(lineChart);
     const lineCard = canvas.closest<HTMLElement>(".chart-card");
     if (lineCard) addExportButton(lineCard, lineChart, lineTitle);
+    return;
   }
+
+  if (chart.type === "radar") {
+    const labels = chart.labels ?? [];
+    const datasets = chart.datasets ?? [];
+    const palette = resolveColors(undefined, datasets.length);
+    const shouldFill = (chart.options?.fill as boolean) !== false;
+    const tension = (chart.options?.tension as number) ?? 0.1;
+
+    const radarTitle = chart.title ?? "chart";
+    const radarChart = new Chart(canvas, {
+      type: "radar",
+      data: {
+        labels,
+        datasets: datasets.map((ds, i) => {
+          const color = palette[i % palette.length];
+          return {
+            label: ds.label,
+            data: ds.data,
+            borderColor: color,
+            borderWidth: 2,
+            backgroundColor: shouldFill ? color + "30" : "transparent",
+            pointBackgroundColor: color,
+            pointBorderColor: getCSSVar("--bg-card"),
+            pointBorderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            tension,
+          };
+        }),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_event, elements) => {
+          if (elements.length === 0) return;
+          const el = elements[0];
+          const ds = datasets[el.datasetIndex];
+          const label = labels[el.index];
+          const value = ds.data[el.index];
+          sendClickMessage(`${ds.label} - ${label}: ${value} in "${radarTitle}"`);
+        },
+        scales: {
+          r: {
+            beginAtZero: true,
+            angleLines: { color: getCSSVar("--border") },
+            grid: { color: getCSSVar("--border") },
+            pointLabels: { color: getCSSVar("--text-secondary"), font: { size: 10 } },
+            ticks: { color: getCSSVar("--text-muted"), backdropColor: "transparent", font: { size: 9 } },
+          },
+        },
+        plugins: {
+          legend: { display: datasets.length > 1, position: "top", align: "end", labels: { color: getCSSVar("--text-secondary"), boxWidth: 8, font: { size: 10 } } },
+          tooltip: tooltipStyle(),
+        },
+      },
+    });
+    deferResize(radarChart);
+    const radarCard = canvas.closest<HTMLElement>(".chart-card");
+    if (radarCard) addExportButton(radarCard, radarChart, radarTitle);
+    return;
+  }
+
+  if (chart.type === "treemap") {
+    const items = (chart.data ?? []) as Array<{ label: string; value: number; group?: string }>;
+    const hasGroups = items.some(d => d.group);
+    const groups = hasGroups ? ["group", "label"] : ["label"];
+    const uniqueKeys = hasGroups
+      ? [...new Set(items.map(d => d.group ?? "Other"))]
+      : items.map(d => d.label);
+    const palette = resolveColors(undefined, uniqueKeys.length);
+    const colorMap = new Map<string, string>();
+    uniqueKeys.forEach((g, i) => colorMap.set(g, palette[i % palette.length]));
+
+    const treemapTitle = chart.title ?? "chart";
+    const treemapChart = new Chart(canvas, {
+      type: "treemap" as any,
+      data: {
+        datasets: [{
+          tree: items.map(d => ({ label: d.label, value: d.value, group: d.group ?? "Other" })),
+          key: "value",
+          groups,
+          borderWidth: 1,
+          borderColor: getCSSVar("--bg-card"),
+          spacing: 1,
+          backgroundColor: (ctx: any) => {
+            if (!ctx.raw?._data) return palette[0] + "CC";
+            const key = hasGroups ? ctx.raw._data.group : ctx.raw._data.label;
+            return (colorMap.get(key) ?? palette[0]) + "CC";
+          },
+          labels: {
+            display: true,
+            color: getCSSVar("--text-primary"),
+            font: { size: 10, weight: "600" as any },
+            formatter: (ctx: any) => ctx.raw?._data?.label ?? "",
+          },
+          captions: {
+            display: hasGroups,
+            color: getCSSVar("--text-secondary"),
+            font: { size: 9 },
+            padding: 3,
+          },
+        }] as any,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_event, elements) => {
+          if (elements.length === 0) return;
+          const raw = (elements[0] as any).element?.$context?.raw?._data;
+          if (raw) sendClickMessage(`${raw.label}: ${raw.value?.toLocaleString()} in "${treemapTitle}"`);
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltipStyle(),
+            callbacks: {
+              title: (items: any[]) => items[0]?.raw?._data?.label ?? "",
+              label: (ctx: any) => ` Value: ${ctx.raw?._data?.value?.toLocaleString()}`,
+            },
+          },
+        },
+      },
+    });
+    deferResize(treemapChart);
+    const treemapCard = canvas.closest<HTMLElement>(".chart-card");
+    if (treemapCard) addExportButton(treemapCard, treemapChart, treemapTitle);
+    const treemapBody = canvas.closest<HTMLElement>(".chart-card__body");
+    if (treemapBody) addCanvasZoom(treemapBody, canvas, treemapChart);
+    return;
+  }
+
+  if (chart.type === "sankey") {
+    const flows = (chart.data ?? []) as Array<{ from: string; to: string; flow: number }>;
+    const nodes = [...new Set(flows.flatMap(d => [d.from, d.to]))];
+    const palette = resolveColors(undefined, nodes.length);
+    const colorMap = new Map<string, string>();
+    nodes.forEach((n, i) => colorMap.set(n, palette[i % palette.length]));
+
+    const sankeyTitle = chart.title ?? "chart";
+    const sankeyChart = new Chart(canvas, {
+      type: "sankey" as any,
+      data: {
+        datasets: [{
+          data: flows,
+          colorFrom: (ctx: any) => {
+            const f = ctx.dataset.data[ctx.dataIndex];
+            return f ? (colorMap.get(f.from) ?? palette[0]) : palette[0];
+          },
+          colorTo: (ctx: any) => {
+            const f = ctx.dataset.data[ctx.dataIndex];
+            return f ? (colorMap.get(f.to) ?? palette[1]) : palette[1];
+          },
+          colorMode: "gradient",
+          borderWidth: 0,
+          nodeWidth: 10,
+          color: getCSSVar("--text-primary"),
+          font: { size: 10 },
+        }] as any,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_event, elements) => {
+          if (elements.length === 0) return;
+          const flow = flows[(elements[0] as any).index];
+          if (flow) sendClickMessage(`${flow.from} → ${flow.to}: ${flow.flow.toLocaleString()} in "${sankeyTitle}"`);
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltipStyle(),
+            callbacks: {
+              label: (ctx: any) => {
+                const f = ctx.dataset.data[ctx.dataIndex];
+                return f ? `${f.from} → ${f.to}: ${f.flow.toLocaleString()}` : "";
+              },
+            },
+          },
+        },
+      },
+    });
+    deferResize(sankeyChart);
+    const sankeyCard = canvas.closest<HTMLElement>(".chart-card");
+    if (sankeyCard) addExportButton(sankeyCard, sankeyChart, sankeyTitle);
+    return;
+  }
+
+  if (chart.type === "wordcloud") {
+    const words = (chart.data ?? []) as Array<{ text: string; value: number }>;
+    const palette = resolveColors(undefined, Math.min(words.length, 10));
+    const maxVal = Math.max(...words.map(d => d.value));
+    const minVal = Math.min(...words.map(d => d.value));
+    const range = maxVal - minVal || 1;
+
+    const wcTitle = chart.title ?? "chart";
+    const wcChart = new Chart(canvas, {
+      type: "wordCloud" as any,
+      data: {
+        labels: words.map(d => d.text),
+        datasets: [{
+          data: words.map(d => 10 + ((d.value - minVal) / range) * 30),
+          color: words.map((_, i) => palette[i % palette.length]),
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_event, elements) => {
+          if (elements.length === 0) return;
+          const item = words[elements[0].index];
+          if (item) sendClickMessage(`"${item.text}": ${item.value} in "${wcTitle}"`);
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltipStyle(),
+            callbacks: {
+              label: (ctx: any) => {
+                const item = words[ctx.dataIndex];
+                return item ? `${item.text}: ${item.value.toLocaleString()}` : "";
+              },
+            },
+          },
+        },
+      },
+    });
+    deferResize(wcChart);
+    const wcCard = canvas.closest<HTMLElement>(".chart-card");
+    if (wcCard) addExportButton(wcCard, wcChart, wcTitle);
+    return;
+  }
+
+  if (chart.type === "boxplot") {
+    const labels = chart.labels ?? [];
+    const datasets = (chart.datasets ?? []) as Array<{ label: string; data: number[][] }>;
+    const palette = resolveColors(undefined, datasets.length);
+    const style = (chart.options?.style as string) ?? "boxplot";
+    const isHorizontal = (chart.options?.horizontal as boolean) === true;
+
+    const bpTitle = chart.title ?? "chart";
+    const bpChart = new Chart(canvas, {
+      type: style as any,
+      data: {
+        labels,
+        datasets: datasets.map((ds, i) => {
+          const color = palette[i % palette.length];
+          return {
+            label: ds.label,
+            data: ds.data,
+            backgroundColor: color + "40",
+            borderColor: color,
+            borderWidth: 1.5,
+            outlierBackgroundColor: color,
+            outlierRadius: 2,
+            itemRadius: 0,
+            medianColor: getCSSVar("--text-primary"),
+          };
+        }),
+      },
+      options: {
+        indexAxis: isHorizontal ? "y" : "x",
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_event, elements) => {
+          if (elements.length === 0) return;
+          const el = elements[0];
+          const label = labels[el.index];
+          sendClickMessage(`${datasets[el.datasetIndex]?.label} - ${label} in "${bpTitle}"`);
+        },
+        scales: {
+          x: { border: { display: false }, grid: { display: isHorizontal, color: getCSSVar("--border") }, ticks: { color: getCSSVar("--text-secondary"), font: { size: 10 } } },
+          y: { border: { display: false }, grid: { display: !isHorizontal, color: getCSSVar("--border") }, ticks: { color: getCSSVar("--text-secondary"), font: { size: 10 } } },
+        },
+        plugins: {
+          legend: { display: datasets.length > 1, position: "top", align: "end", labels: { color: getCSSVar("--text-secondary"), boxWidth: 8, font: { size: 10 } } },
+          tooltip: tooltipStyle(),
+        },
+      },
+    });
+    deferResize(bpChart);
+    const bpCard = canvas.closest<HTMLElement>(".chart-card");
+    if (bpCard) addExportButton(bpCard, bpChart, bpTitle);
+    return;
+  }
+
+  if (chart.type === "geo") {
+    const geoData = (chart.data ?? {}) as Record<string, number>;
+    const projection = (chart.options?.projection as string) ?? "naturalEarth1";
+    const colorScaleKey = (chart.options?.colorScale as string) ?? "blue";
+    const showLegend = (chart.options?.showLegend as boolean) !== false;
+    const missingColor = (chart.options?.missingColor as string) ?? "rgba(128, 140, 160, 0.15)";
+
+    const countries = (feature(worldAtlas as any, (worldAtlas as any).objects.countries) as any).features as any[];
+    const valueMap = new Map<string, number>();
+    for (const [code, value] of Object.entries(geoData)) {
+      const numericId = ALPHA2_TO_NUMERIC[code.toUpperCase()];
+      if (numericId) valueMap.set(numericId, value);
+    }
+    const interpolate = COLOR_SCALES[colorScaleKey] ?? COLOR_SCALES.blue;
+
+    const geoTitle = chart.title ?? "chart";
+    const geoChart = new Chart(canvas, {
+      type: "choropleth" as any,
+      data: {
+        labels: countries.map((c: any) => c.properties?.name ?? "Unknown"),
+        datasets: [{
+          outline: countries,
+          data: countries.map((c: any) => ({
+            feature: c,
+            value: valueMap.get(String(c.id)) ?? null,
+          })),
+          outlineBorderColor: getCSSVar("--text-muted") || "#666",
+          outlineBorderWidth: 0.5,
+          borderColor: getCSSVar("--text-muted") || "#666",
+          borderWidth: 0.3,
+        }] as any,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_event: any, elements: any[]) => {
+          if (elements.length === 0) return;
+          const idx = elements[0].index;
+          const feat = countries[idx];
+          const name = feat.properties?.name ?? "Unknown";
+          const numId = String(feat.id);
+          const alpha2 = NUMERIC_TO_ALPHA2[numId] ?? numId;
+          const val = valueMap.get(numId);
+          sendClickMessage(val != null
+            ? `${name} (${alpha2}): ${val.toLocaleString()} in "${geoTitle}"`
+            : `${name} (${alpha2}): no data in "${geoTitle}"`);
+        },
+        scales: {
+          projection: { axis: "x" as const, projection },
+          color: {
+            axis: "x" as const,
+            interpolate,
+            display: showLegend,
+            missing: missingColor,
+            legend: { position: "bottom-right" as const, align: "right" as const, length: 100, width: 8, indicatorWidth: 6 },
+          },
+        } as any,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltipStyle(),
+            callbacks: {
+              label: (ctx: any) => {
+                const feat = countries[ctx.dataIndex];
+                const name = feat?.properties?.name ?? "Unknown";
+                const val = ctx.raw?.value;
+                return val != null ? ` ${name}: ${val.toLocaleString()}` : ` ${name}: No data`;
+              },
+            },
+          },
+        },
+      } as any,
+    });
+    deferResize(geoChart);
+    const geoCard = canvas.closest<HTMLElement>(".chart-card");
+    if (geoCard) addExportButton(geoCard, geoChart, geoTitle);
+    const geoBody = canvas.closest<HTMLElement>(".chart-card__body");
+    if (geoBody) addCanvasZoom(geoBody, canvas, geoChart);
+    return;
+  }
+
+  if (chart.type === "bubble_map") {
+    const bubbleData = (chart.data ?? []) as Array<{ label: string; latitude: number; longitude: number; value: number }>;
+    const projection = (chart.options?.projection as string) ?? "naturalEarth1";
+    const sizeRange = (chart.options?.sizeRange as [number, number]) ?? [3, 20];
+    const showOutline = (chart.options?.showOutline as boolean) !== false;
+    const bubbleColor = (chart.options?.bubbleColor as string) ?? (getCSSVar("--accent") || "rgba(59, 130, 246, 0.7)");
+
+    const countries = (feature(worldAtlas as any, (worldAtlas as any).objects.countries) as any).features as any[];
+    const bmTitle = chart.title ?? "chart";
+
+    const bmChart = new Chart(canvas, {
+      type: "bubbleMap" as any,
+      data: {
+        labels: bubbleData.map((d) => d.label),
+        datasets: [{
+          outline: countries,
+          showOutline,
+          outlineBorderColor: getCSSVar("--text-muted") || "#666",
+          outlineBorderWidth: 0.5,
+          backgroundColor: bubbleColor,
+          data: bubbleData.map((d) => ({
+            longitude: d.longitude,
+            latitude: d.latitude,
+            value: d.value,
+          })),
+        }] as any,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (_event: any, elements: any[]) => {
+          if (elements.length === 0) return;
+          const idx = elements[0].index;
+          const pt = bubbleData[idx];
+          if (pt) sendClickMessage(`${pt.label}: ${pt.value.toLocaleString()} in "${bmTitle}"`);
+        },
+        scales: {
+          projection: { axis: "x" as const, projection },
+          size: { axis: "x" as const, display: false, range: sizeRange },
+        } as any,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            ...tooltipStyle(),
+            callbacks: {
+              label: (ctx: any) => {
+                const pt = bubbleData[ctx.dataIndex];
+                return pt ? ` ${pt.label}: ${pt.value.toLocaleString()}` : "";
+              },
+            },
+          },
+        },
+      } as any,
+    });
+    deferResize(bmChart);
+    const bmCard = canvas.closest<HTMLElement>(".chart-card");
+    if (bmCard) addExportButton(bmCard, bmChart, bmTitle);
+    const bmBody = canvas.closest<HTMLElement>(".chart-card__body");
+    if (bmBody) {
+      const baseRange = [...sizeRange] as [number, number];
+      addCanvasZoom(bmBody, canvas, bmChart, (s) => {
+        (bmChart.options as any).scales.size.range = [baseRange[0] / s, baseRange[1] / s];
+      });
+    }
+    return;
+  }
+
+}
+
+// -- Dashboard export --
+
+async function _exportDashboard(
+  dashEl: HTMLElement,
+  title: string,
+  mode: "full" | "ppt-title" | "ppt-bg" | "document",
+): Promise<void> {
+  // Clone the dashboard so the live DOM is never touched
+  const clone = dashEl.cloneNode(true) as HTMLElement;
+  const fullW = Math.max(dashEl.getBoundingClientRect().width, dashEl.scrollWidth);
+  clone.style.cssText = `position:fixed;left:-99999px;top:0;width:${fullW}px;pointer-events:none;`;
+  document.body.appendChild(clone);
+
+  // 1. Swap cloned canvases to <img> (cloned canvases lose pixel data)
+  const origCanvases = dashEl.querySelectorAll<HTMLCanvasElement>(".chart-card__body canvas");
+  const cloneCanvases = clone.querySelectorAll<HTMLCanvasElement>(".chart-card__body canvas");
+  cloneCanvases.forEach((cv, i) => {
+    const img = document.createElement("img");
+    img.src = origCanvases[i].toDataURL();
+    img.style.cssText = `position:absolute;inset:0;width:100%;height:100%;`;
+    cv.parentElement!.appendChild(img);
+    cv.style.display = "none";
+  });
+
+  // 2. Freeze animations/transitions
+  const overrideStyle = document.createElement("style");
+  overrideStyle.textContent = [
+    `[data-mcp-clone] *,[data-mcp-clone] *::before,[data-mcp-clone] *::after{animation:none!important;transition:none!important;}`,
+    `[data-mcp-clone] .card,[data-mcp-clone] .chart-wrapper{opacity:1!important;}`,
+    `[data-mcp-clone] .card::before{display:none!important;}`,
+    `[data-mcp-clone] .card{border-color:rgba(255,255,255,0.08)!important;box-shadow:0 1px 3px rgba(0,0,0,0.4),0 4px 12px rgba(0,0,0,0.3)!important;}`,
+  ].join("");
+  clone.setAttribute("data-mcp-clone", "");
+  document.head.appendChild(overrideStyle);
+
+  // 3. Resolve color-mix() to inline rgba()
+  const accent = getComputedStyle(dashEl).getPropertyValue("--accent").trim() || "#6366f1";
+
+  clone.querySelectorAll<HTMLElement>(".hero-orb").forEach(orb => {
+    const c = orb.style.getPropertyValue("--orb-color").trim() || accent;
+    const aura = orb.querySelector<HTMLElement>(".hero-orb__aura");
+    if (aura) {
+      aura.style.background = `radial-gradient(circle at 50% 50%, ${_rgba(c, 50)} 0%, ${_rgba(c, 30)} 30%, ${_rgba(c, 12)} 55%, transparent 70%)`;
+    }
+    const sphere = orb.querySelector<HTMLElement>(".hero-orb__sphere");
+    if (sphere) {
+      sphere.style.background = `radial-gradient(circle at 45% 45%, ${c} 0%, ${_mixBlack(c, 60)} 40%, ${_rgba(c, 25)} 70%, ${_rgba(c, 10)} 100%)`;
+      sphere.style.boxShadow = `0 0 25px ${c}, 0 0 60px ${_rgba(c, 50)}, inset 0 0 40px rgba(255,255,255,0.08), inset 0 0 70px ${_mixBlack(c, 40)}`;
+    }
+  });
+
+  clone.querySelectorAll<HTMLElement>('.hero-gem[data-gem-bg="dark"] .hero-gem__text').forEach(el => {
+    el.style.color = _mixTwo("#f0f0ff", 88, accent);
+  });
+  clone.querySelectorAll<HTMLElement>('.hero-gem[data-gem-bg="light"] .hero-gem__text').forEach(el => {
+    el.style.color = _mixTwo("#1a1a2e", 85, accent);
+  });
+
+  // 4. Resolve shimmer gradient text to canvas-rendered images
+  resolveShimmerForExport(clone);
+
+  // 5. Hide action buttons in the clone
+  clone.querySelectorAll<HTMLElement>(".header__right .export-dropdown, .header__right .export-btn, .chart-card__actions").forEach((el) => {
+    el.style.display = "none";
+  });
+
+  try {
+    const sourceCanvas = await html2canvas(clone, {
+      backgroundColor: getCSSVar("--bg-base") || "#0D1117",
+      scale: window.devicePixelRatio || 2,
+      useCORS: true,
+      logging: false,
+      windowWidth: fullW,
+      windowHeight: clone.scrollHeight,
+    });
+
+    if (mode === "full") {
+      await saveCanvasViaServer(sourceCanvas, title);
+    } else if (mode === "ppt-title") {
+      await _exportTitleSlide(clone, sourceCanvas, title, fullW);
+    } else if (mode === "ppt-bg") {
+      await _exportBackground(clone, sourceCanvas, title, fullW);
+    } else {
+      await _exportPaginated(clone, sourceCanvas, title, fullW);
+    }
+  } catch (e: any) {
+    console.error("Screenshot failed:", e);
+    showToast(`Export failed: ${e.message}`, true);
+  } finally {
+    clone.remove();
+    overrideStyle.remove();
+  }
+}
+
+async function _exportTitleSlide(
+  clone: HTMLElement,
+  sourceCanvas: HTMLCanvasElement,
+  title: string,
+  sourceWidth: number,
+): Promise<void> {
+  const scale = window.devicePixelRatio || 2;
+  const slideW = sourceWidth;
+  const slideH = Math.round(sourceWidth * 9 / 16);
+
+  // Measure overhead area (header + hero + KPIs) - everything above the chart grid
+  const cloneRect = clone.getBoundingClientRect();
+  const chartGrid = clone.querySelector<HTMLElement>(".chart-grid");
+  const gridRect = chartGrid?.getBoundingClientRect();
+  const overheadH = gridRect ? gridRect.top - cloneRect.top : slideH;
+
+  const out = document.createElement("canvas");
+  out.width = Math.round(slideW * scale);
+  out.height = Math.round(slideH * scale);
+  const ctx = out.getContext("2d")!;
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = getCSSVar("--bg-base") || "#0D1117";
+  ctx.fillRect(0, 0, slideW, slideH);
+
+  // Draw the overhead region (header + hero + KPIs), clamped to slide height
+  const drawH = Math.min(overheadH, slideH);
+  const srcH = Math.round(drawH * scale);
+  ctx.drawImage(
+    sourceCanvas,
+    0, 0, sourceCanvas.width, srcH,
+    0, 0, slideW, drawH,
+  );
+
+  await saveCanvasViaServer(out, `${title} - Title Slide`);
+  showToast("Title slide exported - download individual charts for content slides");
+}
+
+async function _exportBackground(
+  clone: HTMLElement,
+  sourceCanvas: HTMLCanvasElement,
+  title: string,
+  sourceWidth: number,
+): Promise<void> {
+  const scale = window.devicePixelRatio || 2;
+  const slideW = sourceWidth;
+  const slideH = Math.round(sourceWidth * 9 / 16);
+
+  // Measure header bar height
+  const header = clone.querySelector<HTMLElement>(".header");
+  const headerH = header ? header.offsetHeight : 0;
+
+  const out = document.createElement("canvas");
+  out.width = Math.round(slideW * scale);
+  out.height = Math.round(slideH * scale);
+  const ctx = out.getContext("2d")!;
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = getCSSVar("--bg-base") || "#0D1117";
+  ctx.fillRect(0, 0, slideW, slideH);
+
+  // Draw just the header bar from the source
+  if (headerH > 0) {
+    const srcH = Math.round(headerH * scale);
+    ctx.drawImage(
+      sourceCanvas,
+      0, 0, sourceCanvas.width, srcH,
+      0, 0, slideW, headerH,
+    );
+  }
+
+  await saveCanvasViaServer(out, `${title} - Background`);
+  showToast("Background slide exported");
+}
+
+async function _exportPaginated(
+  clone: HTMLElement,
+  sourceCanvas: HTMLCanvasElement,
+  title: string,
+  sourceWidth: number,
+): Promise<void> {
+  const scale = window.devicePixelRatio || 2;
+
+  // Page dimensions in CSS pixels (A4 portrait only)
+  const pageW = sourceWidth;
+  const pageH = Math.round(sourceWidth * 297 / 210);
+
+  // Measure positions using getBoundingClientRect for accuracy
+  const cloneRect = clone.getBoundingClientRect();
+  const header = clone.querySelector<HTMLElement>(".header");
+  const chartGrid = clone.querySelector<HTMLElement>(".chart-grid");
+
+  const headerH = header ? header.offsetHeight : 0;
+
+  // Everything above the chart grid is "overhead" (header + hero + KPI row + gaps)
+  const gridRect = chartGrid?.getBoundingClientRect();
+  const gridTopInClone = gridRect ? gridRect.top - cloneRect.top : headerH;
+  const overheadH = gridTopInClone;
+
+  // For repeated pages, we only repeat the header bar (not hero/KPI)
+  const repeatH = headerH;
+
+  const gridTotalH = chartGrid ? chartGrid.scrollHeight : 0;
+
+  // First page gets full overhead, subsequent pages get just the header
+  const firstPageChartArea = pageH - overheadH;
+  const laterPageChartArea = pageH - repeatH;
+
+  if (firstPageChartArea <= 50 || laterPageChartArea <= 50) {
+    showToast("Dashboard too tall for paginated export", true);
+    return;
+  }
+
+  // Measure card boundaries (top + bottom) RELATIVE TO THE GRID
+  const cards = chartGrid?.querySelectorAll<HTMLElement>(':scope > .card, :scope > [id^="dash-css-chart-"]') ?? [];
+  const cardBounds: Array<{ top: number; bottom: number }> = [];
+  if (gridRect) {
+    cards.forEach(card => {
+      const r = card.getBoundingClientRect();
+      cardBounds.push({
+        top: Math.round(r.top - gridRect.top),
+        bottom: Math.round(r.bottom - gridRect.top),
+      });
+    });
+  }
+  const uniqueBottoms = [...new Set(cardBounds.map(c => c.bottom))].sort((a, b) => a - b);
+
+  // A break is safe only if no card straddles it (top < y AND bottom > y)
+  const isSafeBreak = (y: number): boolean =>
+    !cardBounds.some(c => c.top < y && c.bottom > y);
+
+  // Calculate page breaks (positions within the chart grid, relative to grid top)
+  const breaks: number[] = [0];
+  let cursor = 0;
+  let isFirst = true;
+  while (cursor < gridTotalH) {
+    const available = isFirst ? firstPageChartArea : laterPageChartArea;
+    const target = cursor + available;
+    if (target >= gridTotalH) break;
+    // Find the highest SAFE card bottom that doesn't exceed target
+    let best = cursor;
+    for (const b of uniqueBottoms) {
+      if (b > cursor && b <= target && isSafeBreak(b)) best = b;
+    }
+    // If no safe break fits, force break at page boundary (may bisect oversized card)
+    if (best <= cursor) best = target;
+    breaks.push(best);
+    cursor = best;
+    isFirst = false;
+  }
+  if (breaks[breaks.length - 1] < gridTotalH) {
+    const remaining = gridTotalH - breaks[breaks.length - 1];
+    if (remaining < 50 && breaks.length >= 2) {
+      breaks[breaks.length - 1] = gridTotalH;  // Extend last page (just grid padding)
+    } else {
+      breaks.push(gridTotalH);
+    }
+  }
+
+  const pageCount = breaks.length - 1;
+  showToast(`Exporting ${pageCount} pages...`);
+
+  // Source canvas pixel coordinates for the grid area
+  const gridTopPx = Math.round(gridTopInClone * scale);
+
+  for (let p = 0; p < pageCount; p++) {
+    const headerOnThisPage = p === 0 ? overheadH : repeatH;
+    const sliceH = breaks[p + 1] - breaks[p];
+    const contentH = headerOnThisPage + sliceH;
+
+    const out = document.createElement("canvas");
+    out.width = Math.round(pageW * scale);
+    out.height = Math.round(contentH * scale);
+    const ctx = out.getContext("2d")!;
+    ctx.scale(scale, scale);
+
+    // Fill background (trimmed to content height)
+    ctx.fillStyle = getCSSVar("--bg-base") || "#0D1117";
+    ctx.fillRect(0, 0, pageW, contentH);
+
+    if (p === 0) {
+      // First page: draw full overhead (header + hero + KPI) + chart slice
+      const overheadSrcH = Math.round(overheadH * scale);
+      ctx.drawImage(
+        sourceCanvas,
+        0, 0, sourceCanvas.width, overheadSrcH,
+        0, 0, pageW, overheadH,
+      );
+    } else {
+      // Later pages: draw just the header bar
+      const headerSrcH = Math.round(repeatH * scale);
+      ctx.drawImage(
+        sourceCanvas,
+        0, 0, sourceCanvas.width, headerSrcH,
+        0, 0, pageW, repeatH,
+      );
+    }
+
+    // Chart slice from grid area
+    if (sliceH > 0) {
+      const sliceStart = breaks[p];
+      ctx.drawImage(
+        sourceCanvas,
+        0, gridTopPx + Math.round(sliceStart * scale), sourceCanvas.width, Math.round(sliceH * scale),
+        0, headerOnThisPage, pageW, sliceH,
+      );
+    }
+
+    const filename = `${title}_${p + 1}of${pageCount}`;
+    await saveCanvasViaServer(out, filename);
+  }
+
+  showToast(`Exported ${pageCount} pages`);
 }
 
 registerChart("dashboard", "render_dashboard", renderDashboard);

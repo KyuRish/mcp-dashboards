@@ -46,13 +46,50 @@ const PieOptions = z.object({
 
 const DatasetSchema = z.object({
   label: z.string().describe("Name of this data series"),
-  data: z.array(z.number().nullable()).describe("Array of numeric values (null for gaps in the series)"),
+  data: z.array(z.any()).describe("Data values: numbers for bar/line, {x,y} for scatter, {x,o,h,l,c} for candlestick"),
+  colors: z.array(z.string()).optional().describe("Per-point colors (e.g. one color per bar). Overrides theme palette for this series"),
+});
+
+const AnnotationSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("line"),
+    axis: z.enum(["x", "y"]).describe("Which axis the line is on"),
+    value: z.number().describe("Position on the axis"),
+    label: z.string().optional().describe("Label text"),
+    color: z.string().optional().describe("Line color"),
+    style: z.enum(["solid", "dashed"]).optional().describe("Line style. Default: dashed"),
+  }),
+  z.object({
+    type: z.literal("box"),
+    xMin: z.number().optional(),
+    xMax: z.number().optional(),
+    yMin: z.number().optional(),
+    yMax: z.number().optional(),
+    label: z.string().optional(),
+    color: z.string().optional().describe("Background color"),
+  }),
+  z.object({
+    type: z.literal("label"),
+    x: z.union([z.number(), z.string()]).describe("X position (number or category label)"),
+    y: z.number().describe("Y position"),
+    content: z.string().describe("Label text"),
+    color: z.string().optional(),
+  }),
+]);
+
+const AnnotationsOption = z.array(AnnotationSchema).optional().describe("Annotations: reference lines, highlighted regions, or labels on the chart");
+
+const DrilldownLevel = z.object({
+  labels: z.array(z.string()),
+  datasets: z.array(z.object({ label: z.string(), data: z.array(z.number()) })),
 });
 
 const BarOptions = z.object({
   horizontal: z.boolean().optional().describe("Horizontal bars instead of vertical. Default: false"),
   stacked: z.boolean().optional().describe("Stack datasets. Default: false"),
   colors: ColorsOption,
+  annotations: AnnotationsOption,
+  drilldown: z.record(z.string(), DrilldownLevel).optional().describe("Click-to-drill sub-charts. Keys must match labels. Example: { 'North America': { labels: ['US','Canada'], datasets: [{ label: 'Revenue', data: [350,100] }] } }"),
 }).optional();
 
 const LineOptions = z.object({
@@ -60,6 +97,7 @@ const LineOptions = z.object({
   smooth: z.boolean().optional().describe("Smooth curve interpolation. Default: true"),
   showPoints: z.boolean().optional().describe("Show data points. Default: false"),
   colors: ColorsOption,
+  annotations: AnnotationsOption,
 }).optional();
 
 const ScatterPointSchema = z.object({
@@ -86,10 +124,11 @@ const ScatterOptions = z.object({
   showLine: z.boolean().optional().describe("Connect points with lines. Default: false"),
   showLabels: z.boolean().optional().describe("Show per-point labels on chart. Default: true if any point has a label"),
   colors: ColorsOption,
+  annotations: AnnotationsOption,
   referenceLines: z.object({
     horizontal: z.array(ReferenceLineSchema).optional().describe("Horizontal reference lines (y-axis values)"),
     vertical: z.array(ReferenceLineSchema).optional().describe("Vertical reference lines (x-axis values)"),
-  }).optional().describe("Reference lines for context (averages, thresholds, quadrant boundaries)"),
+  }).optional().describe("(Deprecated - use annotations instead) Reference lines for context"),
 }).optional();
 
 const CandlestickPointSchema = z.object({
@@ -112,14 +151,15 @@ const KpiSchema = z.object({
   change: z.number().optional().describe("Percentage change (positive = up, negative = down)"),
   prefix: z.string().optional().describe("Prefix like $ or Rs."),
   suffix: z.string().optional().describe("Suffix like % or units"),
+  sparkline: z.array(z.number()).optional().describe("Mini trend line (5-20 values). Always include when the metric has a trend or % change"),
 });
 
 const DashboardChart = z.object({
   type: z.enum([
-    "pie", "bar", "line", "hero_ring", "hero",
+    "pie", "bar", "line", "scatter", "candlestick", "radar", "treemap", "sankey", "wordcloud", "boxplot", "hero_ring", "hero",
     "bullet", "lollipop", "dumbbell", "variance", "funnel",
     "slope", "waffle", "sparkline", "radial_cluster",
-    "waterfall", "heatmap", "timeline",
+    "waterfall", "heatmap", "timeline", "geo", "bubble_map",
   ]).describe("Chart type"),
   title: z.string().optional(),
   data: z.any().describe("Chart data matching the chart type's data format"),
@@ -261,7 +301,7 @@ export function createServer(): McpServer {
     {
       title: "Bar Chart",
       description:
-        "Render an interactive bar chart. Supports vertical/horizontal, stacked, and multi-series datasets. Supports themes for styled visuals.",
+        "Render an interactive bar chart. Supports vertical/horizontal, stacked, multi-series, and click-to-drill-down (options.drilldown). Supports themes for styled visuals.",
       inputSchema: {
         title: z.string().describe("Chart title"),
         labels: z.array(z.string()).describe("Category labels for the x-axis"),
@@ -405,7 +445,7 @@ export function createServer(): McpServer {
       title: "Hero Metric",
       description: [
         "Render a purpose-driven hero metric widget. Pick the variant that answers your question:",
-        "- big_number: 'How much? Which direction?' Large value + trend arrow + optional sparkline. Params: value, unit, change, changePeriod, sparkline[]",
+        "- big_number: 'How much? Which direction?' Default hero metric - clean, professional, works in any context. Large value + trend arrow + optional sparkline. Params: value, unit, change, changePeriod, sparkline[]",
         "- progress_ring: 'How close to goal?' Animated ring or half-gauge. Params: value, unit, label, progress (0-100), style ('ring'|'gauge'), size, color",
         "- status: 'Good or bad?' Pulsing dot + subsystem badges. Params: label, statusLevel ('good'|'warn'|'bad'), subsystems[{name,status}], count, peak",
         "- comparison: 'How do we compare?' Before/after + improvement. Params: before, after, improvement, beforeLabel, afterLabel",
@@ -414,11 +454,10 @@ export function createServer(): McpServer {
         "- threshold: 'Above or below limit?' Gradient bar + marker. Params: value, max, threshold, unit, zones[{label,from,to,color}]",
         "- breakdown: 'What is the split?' Stacked bar + legend. Params: items[{label,value,color?}]",
         "- nps: 'How satisfied?' Score + rating scale. Params: value, max (default 100), rating ('good'|'neutral'|'bad')",
-        "- orb: 'What is the headline?' Glowing sphere. Params: value, unit, label, color",
-        "- gem: 'Premium gem metric' Faceted/spherical gem. Params: value, unit, label, gemType. gemTypes:",
-        "  diamond='Crown number' (net worth, total revenue) | ruby='What's critical' (urgent, burn rate) | sapphire='Foundation' (stability, uptime)",
-        "  emerald='Growth' (YoY, appreciation) | golden_pearl='Treasure' (gold, commodities) | white_pearl='Clean total' (savings)",
-        "  black_pearl='Rare find' (alt investments, crypto) | crystal='Future' (forecasts, projections)",
+        "- orb: 'What is the headline?' Dramatic glowing sphere. Use golden orb for resumes/portfolios. For tech meetings use only black, white, or crystal-colored orbs as subtle flair. Best with dark themes (tokyo-midnight, ops-control, startup). Avoid for formal contexts (boardroom, clinical, consultant). Params: value, unit, label, color",
+        "- gem: 'Premium gem metric' Faceted/spherical gem - for wealth, fintech, trading, crypto, luxury contexts ONLY. Best with golden-treasury, tokyo-midnight themes. Do NOT use for corporate, clinical, consultant, or boardroom dashboards - use big_number instead. Params: value, unit, label, gemType. gemTypes:",
+        "  crystal='Future' (forecasts, projections) | black_pearl='Rare find' (alt investments, crypto) | golden_pearl='Treasure' (gold, commodities) | white_pearl='Clean total' (savings)",
+        "  diamond='Crown number' (net worth, total revenue) | ruby='What's critical' (urgent, burn rate) | sapphire='Foundation' (stability, uptime) | emerald='Growth' (YoY, appreciation)",
       ].join("\n"),
       inputSchema: {
         title: z.string().describe("Chart title"),
@@ -531,7 +570,7 @@ export function createServer(): McpServer {
         "Render a full dashboard with KPI cards, charts, and optional hero metric in a responsive grid. Available themes: boardroom (investors, board decks), corporate (enterprise daily use), sales-floor (quota tracking, leaderboards), golden-treasury (wealth, luxury real estate), clinical (healthcare, compliance - WCAG AAA), startup (SaaS metrics, YC demos), ops-control (DevOps, manufacturing), tokyo-midnight (crypto, trading, gaming), zen-garden (wellness, sustainability), consultant (agency deliverables, presentations). Mix-and-match: set palette + typography + effects independently.",
       inputSchema: {
         title: z.string().describe("Dashboard title"),
-        kpis: z.array(KpiSchema).optional().describe("KPI metrics shown as cards at the top"),
+        kpis: z.array(KpiSchema).optional().describe("KPI cards at the top. Include sparkline[] with 5-20 trend values whenever a metric has a % change - this adds an inline mini chart to the card"),
         charts: z.array(DashboardChart).describe("Array of charts to display in the grid"),
         columns: z.number().int().min(1).max(4).optional().describe("Number of grid columns (1-4). Default: auto-fill based on available width"),
         theme: ThemeParam,
@@ -552,6 +591,7 @@ export function createServer(): McpServer {
         change?: number;
         prefix?: string;
         suffix?: string;
+        sparkline?: number[];
       }>;
       charts: Array<{
         type: string;
@@ -607,6 +647,169 @@ export function createServer(): McpServer {
       };
     }
   );
+
+  // -- Tool: render_radar_chart --
+  _registerChartTool(server, "render_radar_chart", {
+    title: "Radar Chart",
+    description: "Render a radar (spider/web) chart - 'How do items compare across multiple dimensions?' Great for skill profiles, product comparisons, competitive analysis.",
+  }, {
+    title: z.string().describe("Chart title"),
+    labels: z.array(z.string()).describe("Axis labels around the perimeter (e.g. Speed, Cost, UX)"),
+    datasets: z.array(DatasetSchema).describe("One or more data series to compare"),
+    options: z.object({
+      fill: z.boolean().optional().describe("Fill area inside the radar. Default: true"),
+      tension: z.number().optional().describe("Line smoothing: 0 = angular, 0.3 = smooth. Default: 0.1"),
+      scale_min: z.number().optional().describe("Minimum scale value"),
+      scale_max: z.number().optional().describe("Maximum scale value"),
+      colors: ColorsOption,
+    }).optional(),
+  }, (args) => ({
+    type: "radar" as const,
+    title: args.title,
+    labels: args.labels,
+    datasets: args.datasets,
+    options: args.options ?? {},
+  }), (args) => {
+    const ds = args.datasets as any[];
+    return `${args.title}: ${ds.map((d: any) => d.label).join(", ")} across ${(args.labels as string[]).length} dimensions`;
+  });
+
+  // -- Tool: render_treemap_chart --
+  _registerChartTool(server, "render_treemap_chart", {
+    title: "Treemap",
+    description: "Render a treemap - 'What takes up the most space?' Nested rectangles sized by value. Supports optional grouping for hierarchical data (e.g. region > country). Great for budget breakdowns, disk usage, portfolio allocation.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string().describe("Item name"),
+      value: z.number().describe("Numeric size value"),
+      group: z.string().optional().describe("Optional group for hierarchy (e.g. 'Technology', 'Healthcare')"),
+    })).describe("Array of items to display"),
+    options: z.object({
+      groups: z.boolean().optional().describe("Enable grouping by group field. Default: auto-detected"),
+      colors: ColorsOption,
+    }).optional(),
+  }, (args) => ({
+    type: "treemap" as const,
+    title: args.title,
+    data: args.data,
+    options: args.options ?? {},
+  }), (args) => {
+    const items = args.data as any[];
+    return `${args.title}: ${items.length} items, largest: ${items.sort((a: any, b: any) => b.value - a.value)[0]?.label}`;
+  });
+
+  // -- Tool: render_sankey_chart --
+  _registerChartTool(server, "render_sankey_chart", {
+    title: "Sankey Diagram",
+    description: "Render a sankey flow diagram - 'Where does it go?' Shows flows between nodes with width proportional to value. Great for budget flows, user journeys, energy transfers, conversion funnels with multiple paths.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      from: z.string().describe("Source node name"),
+      to: z.string().describe("Target node name"),
+      flow: z.number().describe("Flow amount"),
+    })).describe("Array of flows between nodes"),
+    options: z.object({
+      colorMode: z.enum(["gradient", "from", "to"]).optional().describe("Flow color mode. Default: gradient"),
+      colors: ColorsOption,
+    }).optional(),
+  }, (args) => ({
+    type: "sankey" as const,
+    title: args.title,
+    data: args.data,
+    options: args.options ?? {},
+  }), (args) => {
+    const flows = args.data as any[];
+    const nodes = [...new Set(flows.flatMap((f: any) => [f.from, f.to]))];
+    return `${args.title}: ${flows.length} flows across ${nodes.length} nodes`;
+  });
+
+  // -- Tool: render_wordcloud_chart --
+  _registerChartTool(server, "render_wordcloud_chart", {
+    title: "Word Cloud",
+    description: "Render a word cloud - 'What are the dominant themes?' Words sized by frequency or importance. Great for survey responses, keyword analysis, topic frequency.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      text: z.string().describe("Word or phrase"),
+      value: z.number().describe("Frequency, weight, or importance score"),
+    })).describe("Array of words with values"),
+    options: z.object({
+      colors: ColorsOption,
+    }).optional(),
+  }, (args) => ({
+    type: "wordcloud" as const,
+    title: args.title,
+    data: args.data,
+    options: args.options ?? {},
+  }), (args) => {
+    const words = args.data as any[];
+    const top = words.sort((a: any, b: any) => b.value - a.value).slice(0, 5).map((w: any) => w.text);
+    return `${args.title}: ${words.length} words, top: ${top.join(", ")}`;
+  });
+
+  // -- Tool: render_boxplot_chart --
+  _registerChartTool(server, "render_boxplot_chart", {
+    title: "Boxplot / Violin",
+    description: "Render a boxplot or violin chart - 'What is the distribution?' Shows median, quartiles, whiskers, and outliers. Pass raw number arrays per category - stats computed automatically. Use style='violin' for density shape.",
+  }, {
+    title: z.string().describe("Chart title"),
+    labels: z.array(z.string()).describe("Category labels (e.g. ['Q1', 'Q2', 'Q3', 'Q4'])"),
+    datasets: z.array(z.object({
+      label: z.string().describe("Series name"),
+      data: z.array(z.array(z.number())).describe("Array of number arrays - one array of raw values per category"),
+    })).describe("One or more data series"),
+    options: z.object({
+      style: z.enum(["boxplot", "violin"]).optional().describe("Visualization style. Default: boxplot"),
+      horizontal: z.boolean().optional().describe("Horizontal orientation. Default: false"),
+      colors: ColorsOption,
+    }).optional(),
+  }, (args) => ({
+    type: "boxplot" as const,
+    title: args.title,
+    labels: args.labels,
+    datasets: args.datasets,
+    options: args.options ?? {},
+  }), (args) => {
+    const ds = args.datasets as any[];
+    return `${args.title}: ${ds.map((d: any) => d.label).join(", ")} across ${(args.labels as string[]).length} categories`;
+  });
+
+  // -- Tool: render_live_chart --
+  _registerChartTool(server, "render_live_chart", {
+    title: "Live Chart",
+    description: "Render a real-time auto-updating line chart that polls a tool at a regular interval. Use when the user wants to MONITOR a live data source. Set pollTool to 'poll_http' with pollArgs containing a preset or URL to poll external APIs (including other MCP servers' data). The chart auto-refreshes - no user action needed.",
+  }, {
+    title: z.string().describe("Chart title"),
+    pollTool: z.string().describe("Name of the MCP tool to call on each poll (e.g. 'get_system_metrics')"),
+    pollArgs: z.record(z.string(), z.any()).optional().describe("Arguments to pass to the polled tool"),
+    values: z.array(z.object({
+      label: z.string().describe("Series name (e.g. 'CPU %')"),
+      path: z.string().describe("Dot-path to extract a number from the tool result JSON (e.g. 'cpu_percent' or 'metrics.cpu')"),
+    })).describe("One or more numeric values to track per poll"),
+    interval: z.number().optional().describe("Poll interval in seconds. Default: 2"),
+    maxPoints: z.number().optional().describe("Rolling window size. Default: 30"),
+    yLabel: z.string().optional().describe("Y-axis label"),
+    yMin: z.number().optional().describe("Y-axis minimum"),
+    yMax: z.number().optional().describe("Y-axis maximum (e.g. 100 for percentages)"),
+    colors: ColorsOption,
+  }, (args) => ({
+    type: "live" as const,
+    title: args.title,
+    pollTool: args.pollTool,
+    pollArgs: args.pollArgs,
+    values: args.values,
+    interval: args.interval,
+    maxPoints: args.maxPoints,
+    yLabel: args.yLabel,
+    yMin: args.yMin,
+    yMax: args.yMax,
+    colors: args.colors,
+  }), (args) => {
+    const series = (args.values as any[]).map((v: any) => v.label).join(", ");
+    return `Live chart "${args.title}" - polling ${args.pollTool} every ${args.interval ?? 2}s: ${series}`;
+  });
 
   // -- Tool: render_scatter_chart --
   registerAppTool(
@@ -1048,7 +1251,7 @@ export function createServer(): McpServer {
 
   _registerChartTool(server, "render_sparkline_chart", {
     title: "Sparkline Cards",
-    description: "Render sparkline cards - 'What is the trend story?' Cards with mini SVG sparklines, current value, and change indicator. Great for metric overview grids.",
+    description: "Standalone sparkline card grid. Prefer using KPI cards with sparkline[] inside render_dashboard instead for a cleaner integrated look.",
   }, {
     title: z.string().describe("Chart title"),
     data: z.array(z.object({
@@ -1133,7 +1336,7 @@ export function createServer(): McpServer {
 
   _registerChartTool(server, "render_timeline_chart", {
     title: "Timeline",
-    description: "Render a timeline - 'Where are we in the process?' Progress dots on a vertical track with status colors (done, active, pending, blocked). Great for project milestones.",
+    description: "Render a timeline - 'Where are we in the process?' Progress dots on a track with status colors (done, active, pending, blocked). Great for project milestones. Use horizontal for ≤8 items (better for slides), vertical for longer lists.",
   }, {
     title: z.string().describe("Chart title"),
     subtitle: z.string().optional().describe("Subtitle text"),
@@ -1142,16 +1345,162 @@ export function createServer(): McpServer {
       status: z.enum(["done", "active", "pending", "blocked"]).describe("Milestone status"),
       date: z.string().optional().describe("Date or time label"),
     })).describe("Array of milestone items"),
+    orientation: z.enum(["vertical", "horizontal"]).optional().describe("Layout direction (default: vertical). Horizontal works best with ≤8 milestones."),
   }, (args) => ({
     type: "timeline",
     title: args.title,
     subtitle: args.subtitle,
     milestones: args.milestones,
+    orientation: args.orientation,
   }), (args) => {
     const ms = args.milestones as any[];
     const done = ms.filter((m: any) => m.status === "done").length;
     return `${args.title}: ${done}/${ms.length} milestones done`;
   });
+
+  _registerChartTool(server, "render_geo_chart", {
+    title: "Geo Map",
+    description: "Render a choropleth world map - 'Where is the value concentrated?' Color-coded countries by numeric value. Pass data as { countryCode: value } using ISO 3166-1 alpha-2 codes (US, DE, IN, GB, etc.).",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.record(z.string(), z.number()).describe("Country values as { alpha2Code: number }. e.g. { 'US': 100, 'DE': 50, 'IN': 75 }"),
+    projection: z.enum(["naturalEarth1", "equalEarth", "mercator"]).optional().describe("Map projection. Default: naturalEarth1"),
+    colorScale: z.string().optional().describe("Color scale: blue (default), green, red, heat, purple, orange"),
+    showLegend: z.boolean().optional().describe("Show color scale legend. Default: true"),
+    missingColor: z.string().optional().describe("Hex color for countries without data. Default: theme border color"),
+  }, (args) => ({
+    type: "geo",
+    title: args.title,
+    data: args.data,
+    options: {
+      projection: args.projection,
+      colorScale: args.colorScale,
+      showLegend: args.showLegend,
+      missingColor: args.missingColor,
+    },
+  }), (args) => {
+    const count = Object.keys(args.data as Record<string, number>).length;
+    return `${args.title}: ${count} countries mapped`;
+  });
+
+  _registerChartTool(server, "render_bubble_map", {
+    title: "Bubble Map",
+    description: "Render a bubble/pin map - sized circles at geographic coordinates. Pass an array of { label, latitude, longitude, value } points. Great for showing city-level data, office locations, event density, etc.",
+  }, {
+    title: z.string().describe("Chart title"),
+    data: z.array(z.object({
+      label: z.string().describe("Point label (city name, office, etc.)"),
+      latitude: z.number().describe("Latitude coordinate"),
+      longitude: z.number().describe("Longitude coordinate"),
+      value: z.number().describe("Numeric value controlling bubble size"),
+    })).describe("Array of geographic data points"),
+    projection: z.enum(["naturalEarth1", "equalEarth", "mercator"]).optional().describe("Map projection. Default: naturalEarth1"),
+    sizeRange: z.tuple([z.number(), z.number()]).optional().describe("Min and max bubble radius in pixels. Default: [3, 25]"),
+    bubbleColor: z.string().optional().describe("Bubble fill color. Default: theme accent"),
+    showOutline: z.boolean().optional().describe("Show country outlines. Default: true"),
+  }, (args) => ({
+    type: "bubble_map",
+    title: args.title,
+    data: args.data,
+    options: {
+      projection: args.projection,
+      sizeRange: args.sizeRange,
+      bubbleColor: args.bubbleColor,
+      showOutline: args.showOutline,
+    },
+  }), (args) => {
+    return `${args.title}: ${(args.data as any[]).length} locations mapped`;
+  });
+
+  // -- Tool: poll_http (data proxy for live charts) --
+  // Scans env vars for POLL_PRESET_<NAME>_URL patterns at registration time.
+  const presets = new Map<string, { url: string; headers: Record<string, string> }>();
+  for (const [key, val] of Object.entries(process.env)) {
+    const m = key.match(/^POLL_PRESET_(.+)_URL$/);
+    if (m && val) {
+      const name = m[1].toLowerCase();
+      let headers: Record<string, string> = {};
+      const headersEnv = process.env[`POLL_PRESET_${m[1]}_HEADERS`];
+      if (headersEnv) {
+        try { headers = JSON.parse(headersEnv); } catch { /* skip malformed */ }
+      }
+      presets.set(name, { url: val, headers });
+    }
+  }
+
+  const presetList = presets.size > 0
+    ? `Available presets: ${[...presets.keys()].join(", ")}. `
+    : "No presets configured. ";
+
+  server.tool(
+    "poll_http",
+    `Fetch JSON from an HTTP endpoint. Used by render_live_chart to poll external APIs. ` +
+    `${presetList}` +
+    `Use "preset" for authenticated APIs (credentials stored server-side in env vars, never exposed). ` +
+    `Use "url" only for public APIs that need no authentication. ` +
+    `NEVER pass API keys or tokens in the "headers" argument - configure a preset instead.`,
+    {
+      preset: z.string().optional().describe(
+        `Named preset that maps to a pre-configured URL + auth headers. ${presetList}` +
+        `Configure via env vars: POLL_PRESET_<NAME>_URL and POLL_PRESET_<NAME>_HEADERS (JSON object).`
+      ),
+      url: z.string().url().optional().describe("Direct URL to fetch (public APIs only - no auth needed)"),
+      headers: z.record(z.string(), z.string()).optional().describe("Extra HTTP headers (public APIs only - NEVER put API keys here)"),
+      method: z.enum(["GET", "POST"]).optional().describe("HTTP method. Default: GET"),
+      body: z.string().optional().describe("Request body for POST requests"),
+    },
+    async (args) => {
+      try {
+        let fetchUrl: string;
+        let fetchHeaders: Record<string, string> = {};
+
+        if (args.preset) {
+          const p = presets.get(args.preset.toLowerCase());
+          if (!p) {
+            return {
+              content: [{ type: "text", text: `Unknown preset "${args.preset}". ${presetList}` }],
+              isError: true,
+            };
+          }
+          fetchUrl = p.url;
+          fetchHeaders = { ...p.headers };
+        } else if (args.url) {
+          fetchUrl = args.url;
+        } else {
+          return {
+            content: [{ type: "text", text: "Either 'preset' or 'url' is required." }],
+            isError: true,
+          };
+        }
+
+        // Merge extra headers (preset headers take priority for auth keys)
+        if (args.headers) {
+          fetchHeaders = { ...args.headers, ...fetchHeaders };
+        }
+
+        const resp = await fetch(fetchUrl, {
+          method: args.method ?? "GET",
+          headers: fetchHeaders,
+          body: args.method === "POST" ? args.body : undefined,
+        });
+
+        if (!resp.ok) {
+          return {
+            content: [{ type: "text", text: `HTTP ${resp.status}: ${resp.statusText}` }],
+            isError: true,
+          };
+        }
+
+        const text = await resp.text();
+        return { content: [{ type: "text", text }] };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: `poll_http failed: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
 
   return server;
 }

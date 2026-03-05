@@ -12,6 +12,7 @@ interface TimelineData {
   title: string;
   subtitle?: string;
   milestones: Milestone[];
+  orientation?: "vertical" | "horizontal";
   theme?: string;
   palette?: string;
   typography?: string;
@@ -36,20 +37,11 @@ function statusIcon(status: string): string {
   }
 }
 
-export function renderTimelineChart(container: HTMLElement, payload: TimelineData): void {
-  const theme = resolveTheme(payload.theme, {
-    palette: payload.palette,
-    typography: payload.typography,
-    effects: payload.effects,
-  });
-  if (theme) applyTheme(container, theme);
-
-  const shimmer = theme?.effects.shimmerTitle ? " shimmer-text" : "";
-
-  const milestones = payload.milestones.map((m, i) => {
+function renderVertical(milestones: Milestone[]): string {
+  return milestones.map((m, i) => {
     const dotCls = statusClass(m.status);
     const icon = statusIcon(m.status);
-    const isLast = i === payload.milestones.length - 1;
+    const isLast = i === milestones.length - 1;
 
     return `
       <div class="timeline__item${isLast ? " timeline__item--last" : ""}" data-idx="${i}">
@@ -64,6 +56,46 @@ export function renderTimelineChart(container: HTMLElement, payload: TimelineDat
       </div>
     `;
   }).join("");
+}
+
+function renderHorizontal(milestones: Milestone[]): string {
+  const items = milestones.slice(0, 8);
+  return items.map((m, i) => {
+    const dotCls = statusClass(m.status);
+    const icon = statusIcon(m.status);
+    const isFirst = i === 0;
+    const isLast = i === items.length - 1;
+
+    return `
+      <div class="timeline__item timeline__item--h" data-idx="${i}">
+        <div class="timeline__track timeline__track--h">
+          <div class="timeline__line--h${isFirst ? " timeline__line--hidden" : ""}"></div>
+          <div class="timeline__dot ${dotCls}">${icon}</div>
+          <div class="timeline__line--h${isLast ? " timeline__line--hidden" : ""}"></div>
+        </div>
+        <div class="timeline__content timeline__content--h">
+          <div class="timeline__label">${escapeHtml(m.label)}</div>
+          ${m.date ? `<div class="timeline__date">${escapeHtml(m.date)}</div>` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+export function renderTimelineChart(container: HTMLElement, payload: TimelineData): void {
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
+
+  const shimmer = theme?.effects.shimmerTitle ? " shimmer-text" : "";
+  const isHorizontal = payload.orientation === "horizontal";
+  const timelineCls = isHorizontal ? "timeline timeline--horizontal" : "timeline";
+  const milestonesHtml = isHorizontal
+    ? renderHorizontal(payload.milestones)
+    : renderVertical(payload.milestones);
 
   container.className = "chart-view";
   container.innerHTML = `
@@ -75,7 +107,7 @@ export function renderTimelineChart(container: HTMLElement, payload: TimelineDat
         </div>
       </div>
       <div class="chart-card__body chart-card__body--css">
-        <div class="timeline">${milestones}</div>
+        <div class="${timelineCls}">${milestonesHtml}</div>
       </div>
     </div>
   `;

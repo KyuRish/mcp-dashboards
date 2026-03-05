@@ -8,10 +8,11 @@ import {
   LineElement,
 } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
+import annotationPlugin from "chartjs-plugin-annotation";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, buildAnnotations, addHtmlExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
-Chart.register(ScatterController, PointElement, LinearScale, Tooltip, Legend, LineElement);
+Chart.register(ScatterController, PointElement, LinearScale, Tooltip, Legend, LineElement, annotationPlugin);
 
 interface ScatterPoint {
   x: number;
@@ -40,6 +41,7 @@ interface ScatterData {
     showLine?: boolean;
     showLabels?: boolean;
     colors?: string[];
+    annotations?: any[];
     referenceLines?: {
       horizontal?: ReferenceLine[];
       vertical?: ReferenceLine[];
@@ -51,69 +53,22 @@ interface ScatterData {
   effects?: string;
 }
 
-/** Chart.js plugin to draw reference lines */
-const referenceLinesPlugin = {
-  id: "referenceLines",
-  afterDraw(chart: Chart, _args: unknown, options: { lines?: ScatterData["options"]["referenceLines"] }) {
-    const lines = options?.lines;
-    if (!lines) return;
-    const ctx = chart.ctx;
-    const xScale = chart.scales["x"];
-    const yScale = chart.scales["y"];
-    if (!xScale || !yScale) return;
-
-    const lineColor = getCSSVar("--text-muted");
-    const labelColor = getCSSVar("--text-secondary");
-    ctx.save();
-
-    // Horizontal reference lines
-    for (const line of lines.horizontal || []) {
-      const y = yScale.getPixelForValue(line.value);
-      if (y < yScale.top || y > yScale.bottom) continue;
-      ctx.beginPath();
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = 1;
-      ctx.setLineDash(line.style === "solid" ? [] : [6, 4]);
-      ctx.moveTo(xScale.left, y);
-      ctx.lineTo(xScale.right, y);
-      ctx.stroke();
-      if (line.label) {
-        ctx.fillStyle = labelColor;
-        ctx.font = "10px sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(line.label, xScale.left + 4, y - 3);
-      }
+/** Convert legacy referenceLines to annotation format and merge with new annotations */
+function mergeAnnotations(options: ScatterData["options"]): any[] {
+  const result: any[] = options.annotations ? [...options.annotations] : [];
+  if (options.referenceLines) {
+    for (const rl of options.referenceLines.horizontal ?? []) {
+      result.push({ type: "line", axis: "y", value: rl.value, label: rl.label, style: rl.style });
     }
-
-    // Vertical reference lines
-    for (const line of lines.vertical || []) {
-      const x = xScale.getPixelForValue(line.value);
-      if (x < xScale.left || x > xScale.right) continue;
-      ctx.beginPath();
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = 1;
-      ctx.setLineDash(line.style === "solid" ? [] : [6, 4]);
-      ctx.moveTo(x, yScale.top);
-      ctx.lineTo(x, yScale.bottom);
-      ctx.stroke();
-      if (line.label) {
-        ctx.fillStyle = labelColor;
-        ctx.font = "10px sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-        ctx.fillText(line.label, x + 4, yScale.top + 3);
-      }
+    for (const rl of options.referenceLines.vertical ?? []) {
+      result.push({ type: "line", axis: "x", value: rl.value, label: rl.label, style: rl.style });
     }
-
-    ctx.restore();
-  },
-};
-
-Chart.register(referenceLinesPlugin);
+  }
+  return result;
+}
 
 export function renderScatterChart(container: HTMLElement, payload: ScatterData): void {
-  const { title, datasets, options } = payload;
+  const { title, datasets, options = {} } = payload;
   const totalPoints = datasets.reduce((s, ds) => s + ds.data.length, 0);
 
   const theme = resolveTheme(payload.theme, {
@@ -264,15 +219,17 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
             },
           },
         },
-        referenceLines: {
-          lines: options.referenceLines,
-        } as any,
+        annotation: (() => {
+          const merged = mergeAnnotations(options);
+          const built = buildAnnotations(merged);
+          return built ? { annotations: built } : undefined;
+        })(),
       },
     },
   });
 
   deferResize(chartInstance);
-  addExportButton(container, chartInstance, title);
+  addHtmlExportButton(container, title);
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
 

@@ -1,40 +1,28 @@
 import {
   Chart,
-  LineController,
-  LineElement,
+  RadarController,
+  RadialLinearScale,
   PointElement,
-  CategoryScale,
-  LinearScale,
+  LineElement,
   Filler,
   Tooltip,
   Legend,
 } from "chart.js";
-import annotationPlugin from "chartjs-plugin-annotation";
-import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, buildAnnotations, addExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, resolveColors, addExportButton, addRefreshButton, sendClickMessage, deferResize, registerChart } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
-Chart.register(
-  LineController,
-  LineElement,
-  PointElement,
-  CategoryScale,
-  LinearScale,
-  Filler,
-  Tooltip,
-  Legend,
-  annotationPlugin
-);
+Chart.register(RadarController, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
-interface LineData {
+interface RadarData {
   title: string;
   labels: string[];
   datasets: Array<{ label: string; data: number[] }>;
   options: {
     fill?: boolean;
-    smooth?: boolean;
-    showPoints?: boolean;
+    tension?: number;
+    scale_min?: number;
+    scale_max?: number;
     colors?: string[];
-    annotations?: any[];
   };
   theme?: string;
   palette?: string;
@@ -42,13 +30,11 @@ interface LineData {
   effects?: string;
 }
 
-export function renderLineChart(container: HTMLElement, payload: LineData): void {
+export function renderRadarChart(container: HTMLElement, payload: RadarData): void {
   const { title, labels, datasets, options } = payload;
   const shouldFill = options.fill !== false;
-  const isSmooth = options.smooth !== false;
-  const showPoints = options.showPoints === true;
+  const tension = options.tension ?? 0.1;
 
-  // Apply theme if specified
   const theme = resolveTheme(payload.theme, {
     palette: payload.palette,
     typography: payload.typography,
@@ -62,7 +48,7 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
         <div class="chart-card__header">
           <div>
             <div class="chart-card__title${theme?.effects.shimmerTitle ? " shimmer-text" : ""}">${escapeHtml(title)}</div>
-            <div class="chart-card__subtitle">${datasets.length} series - ${labels.length} points</div>
+            <div class="chart-card__subtitle">${datasets.length} series - ${labels.length} axes</div>
           </div>
         </div>
         <div class="chart-card__body">
@@ -76,7 +62,7 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
   const palette = resolveColors(options.colors, datasets.length);
 
   const chartInstance = new Chart(canvas, {
-    type: "line",
+    type: "radar",
     data: {
       labels,
       datasets: datasets.map((ds, i) => {
@@ -86,56 +72,46 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
           data: ds.data,
           borderColor: color,
           borderWidth: 2,
-          tension: isSmooth ? 0.4 : 0,
-          fill: shouldFill,
-          backgroundColor: (ctx: any) => {
-            if (!shouldFill) return "transparent";
-            const gradient = ctx.chart.ctx.createLinearGradient(
-              0, 0, 0, ctx.chart.height
-            );
-            gradient.addColorStop(0, color + "40");
-            gradient.addColorStop(1, color + "00");
-            return gradient;
-          },
-          pointRadius: showPoints ? 4 : 0,
-          pointHoverRadius: 6,
+          backgroundColor: shouldFill ? color + "30" : "transparent",
           pointBackgroundColor: color,
           pointBorderColor: getCSSVar("--bg-card"),
           pointBorderWidth: 2,
-          pointHoverBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension,
         };
       }),
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: {
-        mode: "index",
-        intersect: false,
-      },
       onClick: (_event, elements) => {
         if (elements.length === 0) return;
-        const idx = elements[0].index;
-        const label = labels[idx];
-        const values = datasets.map((ds) => `${ds.label}: ${ds.data[idx]?.toLocaleString()}`).join(", ");
-        sendClickMessage(`${label} (${values}) in "${title}"`);
+        const el = elements[0];
+        const ds = datasets[el.datasetIndex];
+        const label = labels[el.index];
+        const value = ds.data[el.index];
+        sendClickMessage(`${ds.label} - ${label}: ${value} in "${title}"`);
       },
       scales: {
-        x: {
-          border: { display: false },
-          grid: { display: false },
-          ticks: { color: getCSSVar("--text-secondary"), font: { size: 11 } },
-        },
-        y: {
-          border: { display: false },
+        r: {
+          beginAtZero: options.scale_min === undefined,
+          min: options.scale_min,
+          max: options.scale_max,
+          angleLines: {
+            color: getCSSVar("--border"),
+          },
           grid: {
             color: getCSSVar("--border"),
-            drawTicks: false,
           },
-          ticks: {
+          pointLabels: {
             color: getCSSVar("--text-secondary"),
             font: { size: 11 },
-            padding: 8,
+          },
+          ticks: {
+            color: getCSSVar("--text-muted"),
+            backdropColor: "transparent",
+            font: { size: 10 },
           },
         },
       },
@@ -151,8 +127,14 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
             font: { size: 11 },
           },
         },
-        tooltip: tooltipStyle(),
-        annotation: buildAnnotations(options.annotations) ? { annotations: buildAnnotations(options.annotations) } : undefined,
+        tooltip: {
+          ...tooltipStyle(),
+          callbacks: {
+            label: (ctx) => {
+              return ` ${ctx.dataset.label}: ${ctx.parsed.r}`;
+            },
+          },
+        },
       },
     },
   });
@@ -162,4 +144,4 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
   addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
 
-registerChart("line", "render_line_chart", renderLineChart);
+registerChart("radar", "render_radar_chart", renderRadarChart);

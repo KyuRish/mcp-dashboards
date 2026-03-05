@@ -44,7 +44,7 @@ interface CandlestickData {
 }
 
 export function renderCandlestickChart(container: HTMLElement, payload: CandlestickData): void {
-  const { title, data, options } = payload;
+  const { title, data, options = {} } = payload;
   const chartType = options.type ?? "candlestick";
   const showVolume = options.showVolume === true && data.some((d) => d.v !== undefined);
 

@@ -2,23 +2,30 @@
 
 mcp-name: io.github.KyuRish/mcp-dashboard
 
-**Turn your data into interactive dashboards inside any AI client.**
+### Your AI can talk about data. Now it can show it.
 
 [![npm](https://img.shields.io/npm/v/mcp-dashboards)](https://www.npmjs.com/package/mcp-dashboards)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)
 
-Renders live, interactive Chart.js visualizations directly inside Claude Desktop, VS Code, and other MCP Apps-compatible clients. No browser needed - charts appear right in the conversation.
+<!-- Screenshots - add 3-4 PNGs to assets/ and uncomment
+<p align="center">
+  <img src="assets/dashboard-boardroom.png" width="800" alt="Executive dashboard with KPIs, geo map, and charts" />
+</p>
+<p align="center">
+  <img src="assets/gem-hero.png" width="400" alt="Gem hero metric" />
+  <img src="assets/geo-choropleth.png" width="400" alt="World choropleth map" />
+</p>
+-->
 
-## What It Does
+## The problem
 
-- **22 chart tools** - pie, bar, line, scatter, candlestick, bullet, lollipop, dumbbell, heatmap, and more
-- **Full dashboards** - KPI cards + masonry-packed multi-chart grids in a single tool call
-- **Interactive** - click any data point, it gets selected. Click "Ask" to send selections back to Claude for follow-up
-- **20 themes** - dark, light, neon, forest, ocean, matrix - with mix-and-match palette/typography/effects
-- **Export** - PNG screenshots and CSV data export from any chart
-- **Auto-detect** - pass any JSON or URL and get the best visualization automatically
-- **Self-contained** - Chart.js bundled via Vite into a single HTML file. Zero CDN, zero external requests
+We use AI for everything - analysis, reports, strategy. But when it comes to actually *seeing* the story in your data, you're stuck copying numbers into a spreadsheet and building charts yourself. The conversation has the insight. The visualization is somewhere else.
+
+## The solution
+
+MCP Dashboard renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 45+ chart types, 20 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
 
 ## Quick Start
 
@@ -40,7 +47,7 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-### Claude Code (VS Code)
+### Claude Code / VS Code
 
 ```bash
 claude mcp add dashboard -- npx -y mcp-dashboards --stdio
@@ -53,16 +60,45 @@ npx mcp-dashboards
 # Server starts on http://localhost:3001/mcp
 ```
 
-## All Tools
+### Supported clients
+
+Works in any MCP Apps-compatible client: **Claude Desktop**, **Claude Web**, **VS Code** (GitHub Copilot), **Goose**, **Postman**, **MCPJam**. ChatGPT support is rolling out.
+
+## What makes this different
+
+Other MCP chart tools generate static images. MCP Dashboard renders **interactive HTML** inside your conversation:
+
+- **Hover tooltips** on every data point - no guessing values
+- **Click to select** any bar, slice, or point - accumulate selections and send them back to the AI for follow-up
+- **Drill-down** - click a bar to explore sub-data, breadcrumb navigation to go back
+- **Zoom & pan** - scroll-wheel zoom up to 12x on geo maps, treemaps, and heatmaps with hi-res re-rendering
+- **Live polling** - real-time charts that auto-update from any API (stock prices, server metrics, crypto)
+- **Export anything** - PNG screenshots, CSV data, PPT slides (16:9 title + background), paginated A4 documents
+- **20 themes** - boardroom gold, neon cyberpunk, forest earth, clinical white - mix palettes, typography, and effects
+- **Shimmer effects** - animated gradient titles that actually export correctly to PNG
+- **KPI sparklines** - inline trend mini-charts in dashboard metric cards
+- **Responsive** - adapts to mobile viewports
+
+**45+ chart types across 20 themes = 900+ visual combinations.** Every one of them interactive.
+
+<details>
+<summary><strong>All 31 Tools</strong></summary>
 
 | Tool | Type | Best For |
 |------|------|----------|
 | `render_pie_chart` | Pie/Donut | Composition - "what makes up the whole?" |
-| `render_bar_chart` | Bar | Comparison - vertical, horizontal, stacked, multi-series |
+| `render_bar_chart` | Bar | Comparison - vertical, horizontal, stacked, drill-down |
 | `render_line_chart` | Line/Area | Trends - smooth curves, gradient fills, time series |
-| `render_scatter_chart` | Scatter | Relationships - per-point labels, reference lines, quadrants |
+| `render_scatter_chart` | Scatter | Relationships - per-point labels, annotations, quadrants |
 | `render_candlestick_chart` | Candlestick | Finance - OHLC data with volume bars |
-| `render_bullet_chart` | Bullet | KPI vs target - 2-8 zone bands with labels (seniority, maturity) |
+| `render_radar_chart` | Radar | Multi-axis comparison - skills, scores, product attributes |
+| `render_treemap_chart` | Treemap | Hierarchy - nested rectangles sized by value |
+| `render_sankey_chart` | Sankey | Flow - money, users, or resources between stages |
+| `render_wordcloud_chart` | Word Cloud | Frequency - sized words from text analysis |
+| `render_boxplot_chart` | Boxplot/Violin | Distribution - quartiles, outliers, density shapes |
+| `render_live_chart` | Live | Real-time - auto-polls any MCP tool on a timer |
+| `poll_http` | Data proxy | Fetch JSON from any HTTP endpoint - secure presets or public URLs |
+| `render_bullet_chart` | Bullet | KPI vs target - 2-8 zone bands with labels |
 | `render_lollipop_chart` | Lollipop | Ranking - clean dots with optional target markers |
 | `render_dumbbell_chart` | Dumbbell | Gaps - before/after with scale labels and zone bands |
 | `render_variance_chart` | Variance | Budget - actual vs budget, color-coded over/under |
@@ -73,6 +109,8 @@ npx mcp-dashboards
 | `render_radial_cluster` | Radial | Health check - multi-metric ring gauges with status |
 | `render_waterfall_chart` | Waterfall | Cumulative - cascading bars showing impact |
 | `render_heatmap_chart` | Heatmap | Intensity - 2D grid with color mapping |
+| `render_geo_chart` | Geo/Map | Geography - color-coded countries by value (choropleth) |
+| `render_bubble_map` | Bubble Map | Pin map - sized circles at lat/lng coordinates |
 | `render_timeline_chart` | Timeline | Progress - milestone tracker with status indicators |
 | `render_hero_metric` | Hero | KPI widgets - 11 variants (progress ring, gem, orb, NPS, etc.) |
 | `render_dashboard` | Dashboard | Everything - KPI cards + multiple charts in responsive grid |
@@ -80,85 +118,105 @@ npx mcp-dashboards
 | `render_from_json` | Auto-detect | Any JSON data - picks the best chart automatically |
 | `render_from_url` | URL fetch | Fetches JSON from a URL and auto-visualizes |
 
-## When to Use Which Chart
+</details>
+
+<details>
+<summary><strong>Which chart should I use?</strong></summary>
 
 | Question | Best Chart | Also Works |
 |----------|-----------|------------|
-| "What makes up the whole?" | Pie/Waffle | Stacked bar |
-| "How do values compare?" | Bar | Lollipop, Bullet |
+| "What makes up the whole?" | Pie/Waffle | Treemap, Stacked bar |
+| "How do values compare?" | Bar | Lollipop, Bullet, Radar |
 | "What's the trend over time?" | Line | Sparkline, Slope |
 | "Are we hitting targets?" | Bullet | Variance, Radial |
 | "Where's the gap?" | Dumbbell | Variance |
 | "How does X relate to Y?" | Scatter | Heatmap |
-| "What's the conversion rate?" | Funnel | Waterfall |
+| "What's the conversion rate?" | Funnel | Waterfall, Sankey |
 | "What changed between periods?" | Slope | Dumbbell |
 | "What's the financial picture?" | Candlestick | Line |
 | "Show me the KPI" | Hero metric | Dashboard |
+| "What's the distribution?" | Boxplot | Violin (same tool) |
+| "Where does money/traffic flow?" | Sankey | Treemap |
+| "How do options score across axes?" | Radar | Heatmap |
+| "What are the top keywords?" | Word Cloud | Bar, Treemap |
+| "Where are users/sales/revenue?" | Geo map | Bubble map, Heatmap |
+| "Monitor this in real-time" | Live chart | - |
+
+</details>
 
 ## Themes
 
 20 built-in themes. Pass `theme` to any tool.
 
-**Classic:** `boardroom`, `corporate`, `sales-floor`, `golden-treasury`, `clinical`, `startup`, `ops-control`, `tokyo-midnight`, `zen-garden`, `consultant`
+| Family | Themes |
+|--------|--------|
+| **Classic** | `boardroom`, `corporate`, `sales-floor`, `golden-treasury`, `clinical`, `startup`, `ops-control`, `tokyo-midnight`, `zen-garden`, `consultant` |
+| **Black/AI** | `black-tron` (cyan neon), `black-elegance` (warm gold), `black-matrix` (green hacker) |
+| **Forest** | `forest-amber` (autumn), `forest-earth` (terracotta) |
+| **Sky** | `sky-light` (airy blue), `sky-ocean` (deep navy), `sky-twilight` (sunset) |
+| **Gray/ML** | `gray-hf` (warm yellow accent), `gray-copilot` (teal on dark) |
 
-**Black/AI:** `black-tron` (cyan neon), `black-elegance` (warm gold), `black-matrix` (green hacker)
+Mix-and-match with `palette`, `typography` (8 options: system, mono, professional, editorial, bold, techno, cyberpunk, luxury), and `effects` (5 presets: none, subtle, shimmer, neon, energetic).
 
-**Forest:** `forest-amber` (autumn warmth), `forest-earth` (terracotta)
+## Live Polling
 
-**Sky:** `sky-light` (airy blue), `sky-ocean` (deep navy), `sky-twilight` (sunset gradient)
+Real-time charts that auto-update from any API. The live chart polls data via `poll_http`, which supports two modes:
 
-**Gray/ML:** `gray-hf` (Hugging Face yellow), `gray-copilot` (GitHub dark + teal)
+### Secure presets (authenticated APIs)
 
-Mix-and-match with `palette`, `typography` (system, mono, professional, editorial, bold, techno, cyberpunk, luxury), and `effects` (none, subtle, shimmer, neon, energetic).
+Configure presets via env vars. Credentials stay server-side and never appear in the conversation.
 
-## Interactive Features
+```json
+{
+  "mcpServers": {
+    "dashboard": {
+      "command": "npx",
+      "args": ["-y", "mcp-dashboards", "--stdio"],
+      "env": {
+        "POLL_PRESET_T212_CASH_URL": "https://live.trading212.com/api/v0/equity/account/cash",
+        "POLL_PRESET_T212_CASH_HEADERS": "{\"Authorization\": \"Bearer YOUR_API_KEY\"}"
+      }
+    }
+  }
+}
+```
 
-- **Click to select** - click any bar, slice, point, or row. A badge animates and the item appears in the selection tray.
-- **Ask Claude** - accumulated selections can be sent back to Claude via the "Ask" button for follow-up analysis.
-- **PNG export** - screenshot any chart or dashboard to your Downloads folder.
-- **CSV export** - export table data as CSV files.
-- **Refresh** - re-run the same tool call to update data.
+Then ask: *"Monitor my portfolio total and P/L live"* - the AI uses `render_live_chart` with `pollArgs: { preset: "t212_cash" }`.
+
+**Naming:** `POLL_PRESET_<NAME>_URL` and `POLL_PRESET_<NAME>_HEADERS` (JSON object).
+
+### Public URLs (no auth needed)
+
+For public APIs, use the URL directly:
+
+*"Show me Bitcoin price updating every 30 seconds"* - uses `pollArgs: { url: "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd" }`.
 
 ## How It Works
 
-Uses [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) to return interactive HTML rendered inside AI clients as sandboxed iframes.
+Built on [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps). You ask the AI to visualize data, it calls the right tool, and the chart renders inline in your conversation. Self-contained - zero CDN, zero external requests.
 
-1. You ask the AI to visualize data
-2. AI calls the appropriate MCP tool with your data
-3. Server returns structured content linked to a bundled HTML resource
-4. Client renders interactive Chart.js visualizations inline in the conversation
+**Requirements:** Node.js 18+ and an MCP Apps-compatible client.
 
-The entire UI (Chart.js + CSS + JS) is bundled into a single self-contained HTML file using Vite. No CDN, no external requests.
-
-## Development
+<details>
+<summary><strong>Contributing</strong></summary>
 
 ```bash
 git clone https://github.com/KyuRish/mcp-dashboards.git
 cd mcp-dashboards
 npm install
 npm run build
-npm run serve
+npm run serve   # http://localhost:3001
+npm run dev     # watch mode
 ```
 
-| Script | Description |
-|--------|-------------|
-| `npm run build` | Build UI + server |
-| `npm run build:ui` | Bundle HTML with Vite |
-| `npm run build:server` | Compile TypeScript server |
-| `npm run serve` | Start HTTP server on port 3001 |
-| `npm start` | Build + serve |
-| `npm run dev` | Watch mode (UI + server) |
-
-## Requirements
-
-- Node.js 18+
-- An MCP Apps-compatible client (Claude Desktop, VS Code, Goose, etc.)
+</details>
 
 ## Support
 
-If this project is useful to you, consider supporting development:
+If MCP Dashboard is useful to you:
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)
 
 ## License
 

@@ -138,6 +138,8 @@ body::before {
   grid-template-areas:
     "header"
     "main";
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .dashboard-main {
@@ -331,6 +333,76 @@ body::before {
   line-height: 1;
 }
 
+.kpi__sparkline {
+  width: 100%;
+  height: 24px;
+  margin-top: 4px;
+  display: block;
+}
+
+/* -- Drill-down Breadcrumb -- */
+.drilldown-breadcrumb {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  margin: -8px 0 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.drilldown-breadcrumb__item {
+  cursor: pointer;
+  color: var(--accent);
+  transition: opacity 0.15s;
+}
+
+.drilldown-breadcrumb__item:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.drilldown-breadcrumb__sep {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* -- Live Chart Indicator -- */
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--negative, #DC2626);
+  margin-right: 4px;
+  vertical-align: middle;
+  animation: statusPulse 1.5s ease-in-out infinite;
+}
+
+.live-dot--paused {
+  background: var(--text-muted);
+  animation: none;
+}
+
+.live-label {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--negative, #DC2626);
+  margin-right: 6px;
+}
+
+.live-dot--paused ~ .live-label,
+.live-dot--paused + .live-label {
+  color: var(--text-muted);
+}
+
+.live-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
 /* -- Chart Grid -- */
 .chart-grid {
   display: grid;
@@ -339,6 +411,13 @@ body::before {
   gap: var(--gap);
   align-content: start;
   align-items: start;
+  overflow: hidden;
+}
+
+/* CSS chart wrappers are bare divs - need same anti-blowout as .chart-card */
+.chart-grid > [id^="dash-css-chart-"] {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .chart-full { grid-column: 1 / -1; }
@@ -400,6 +479,52 @@ body::before {
 .chart-card__body canvas {
   position: absolute;
   inset: 0;
+}
+
+/* -- Geo Zoom Controls -- */
+.geo-zoom-controls {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
+}
+
+.geo-zoom-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s;
+}
+
+.geo-zoom-btn:hover { opacity: 1; }
+
+.geo-tooltip {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 3;
+  background: var(--bg-card-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-md);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  white-space: nowrap;
 }
 
 /* -- Section Title -- */
@@ -474,6 +599,44 @@ body::before {
 }
 .export-btn:active {
   transform: scale(0.92);
+}
+
+/* -- Export Dropdown -- */
+.export-dropdown {
+  position: relative;
+}
+.export-dropdown__menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 170px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.export-dropdown__menu.open {
+  display: block;
+}
+.export-dropdown__menu button {
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.export-dropdown__menu button:hover {
+  background: var(--accent-muted);
+  color: var(--accent);
 }
 
 /* -- Loading state -- */
@@ -1502,9 +1665,23 @@ body::before {
   50%      { filter: drop-shadow(0 0 8px var(--gem-glow)) drop-shadow(0 0 18px var(--gem-glow)); }
 }
 
+/* ---- Faceted gems 20% larger than pearls/crystal ---- */
+.hero-gem--diamond,
+.hero-gem--ruby,
+.hero-gem--sapphire,
+.hero-gem--emerald {
+  --gem-size: 120px;
+}
+
 /* ---- Dashboard-specific gem sizing (smaller in hero row) ---- */
 .dashboard .hero-gem {
   --gem-size: 80px;
+}
+.dashboard .hero-gem--diamond,
+.dashboard .hero-gem--ruby,
+.dashboard .hero-gem--sapphire,
+.dashboard .hero-gem--emerald {
+  --gem-size: 96px;
 }
 .dashboard .hero-gem__value {
   font-size: 13px;
@@ -1526,7 +1703,7 @@ body::before {
 .dashboard-hero--multi {
   gap: 16px;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 .dashboard-hero__slot {
@@ -2449,7 +2626,7 @@ body::before {
 .timeline__dot--pending { background: var(--border-md); }
 .timeline__dot--blocked { background: var(--negative); }
 
-.timeline__stem {
+.timeline__line {
   width: 2px;
   flex: 1;
   min-height: 12px;
@@ -2461,7 +2638,7 @@ body::before {
   padding-top: 0;
 }
 
-.timeline__name {
+.timeline__label {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
@@ -2471,6 +2648,44 @@ body::before {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 1px;
+}
+
+/* -- Timeline Horizontal -- */
+.timeline--horizontal {
+  flex-direction: row;
+  padding: 16px 0 8px;
+}
+.timeline__item--h {
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 2px;
+  gap: 0;
+}
+.timeline__track--h {
+  flex-direction: row;
+  width: 100%;
+  align-items: center;
+}
+.timeline__line--h {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+}
+.timeline__line--hidden {
+  background: transparent;
+}
+.timeline__content--h {
+  padding-top: 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+.timeline__content--h .timeline__date {
+  margin-top: auto;
 }
 
 /* -- Theme Effect: Floating Particles -- */
@@ -2520,6 +2735,83 @@ body::before {
 }
 
 /* -- Reduced motion -- */
+/* -- Mobile Breakpoint -- */
+@media (max-width: 480px) {
+  :root {
+    --gap: 8px;
+    --header-h: 36px;
+  }
+
+  .header {
+    padding: 0 10px;
+  }
+
+  .header__brand {
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .header__meta {
+    display: none;
+  }
+
+  .card {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .kpi {
+    padding: 10px 12px;
+  }
+
+  .kpi__label {
+    font-size: 11px;
+  }
+
+  .kpi__value {
+    font-size: 18px;
+  }
+
+  .chart-card__title {
+    font-size: 12px;
+  }
+
+  .chart-card__subtitle {
+    font-size: 10px;
+  }
+
+  .chart-card__body {
+    height: 180px;
+  }
+
+  .dashboard .chart-card__body {
+    height: 140px;
+  }
+
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Bigger tap targets for buttons */
+  .export-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .selection-tray {
+    padding: 8px;
+    font-size: 11px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

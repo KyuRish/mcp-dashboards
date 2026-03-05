@@ -6,6 +6,12 @@ import "./styles.css";
 import "./charts/pie.js";
 import "./charts/bar.js";
 import "./charts/line.js";
+import "./charts/radar.js";
+import "./charts/treemap.js";
+import "./charts/sankey.js";
+import "./charts/wordcloud.js";
+import "./charts/boxplot.js";
+import "./charts/live.js";
 import "./charts/scatter.js";
 import "./charts/candlestick.js";
 import "./charts/dashboard.js";
@@ -24,6 +30,7 @@ import "./charts/radial-cluster.js";
 import "./charts/waterfall.js";
 import "./charts/heatmap.js";
 import "./charts/timeline.js";
+import "./charts/geo.js";
 
 const root = document.getElementById("app")!;
 

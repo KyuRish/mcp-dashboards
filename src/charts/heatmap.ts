@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart } from "./shared.js";
+import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, addCanvasZoom } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
 interface HeatmapData {
@@ -110,6 +110,10 @@ export function renderHeatmapChart(container: HTMLElement, payload: HeatmapData)
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
   addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+
+  const body = container.querySelector<HTMLElement>(".chart-card__body");
+  const heatmapEl = container.querySelector<HTMLElement>(".heatmap");
+  if (body && heatmapEl) addCanvasZoom(body, heatmapEl);
 }
 
 registerChart("heatmap", "render_heatmap_chart", renderHeatmapChart);
