@@ -2819,3 +2819,127 @@ body::before {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ========================================================================
+   Theme Catalog
+   ======================================================================== */
+
+.theme-catalog {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.theme-catalog__header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.theme-catalog__title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary, #e0e0e0);
+  margin: 0 0 4px;
+}
+
+.theme-catalog__subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted, #888);
+}
+
+.theme-catalog__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .theme-catalog__grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .theme-catalog__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.tc-card {
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+}
+
+.tc-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.tc-card__bg {
+  background: var(--bg-card, #222);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 140px;
+}
+
+.tc-card__name {
+  font-family: var(--font-heading, sans-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary, #e0e0e0);
+  letter-spacing: 0.02em;
+}
+
+.tc-card__meta {
+  font-family: var(--font-body, sans-serif);
+  font-size: 0.65rem;
+  color: var(--text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tc-card__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.tc-bar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  min-width: 0;
+  transition: height 0.3s;
+}
+
+.tc-card__swatches {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.tc-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+/* Glow effect scoped to card */
+.tc-card.fx-glow .tc-card__bg {
+  box-shadow: 0 0 8px var(--glow-color, rgba(100, 100, 255, 0.3));
+}
+
+/* Neon effect scoped to card */
+.tc-card.fx-neon .tc-card__bg {
+  box-shadow: 0 0 12px var(--glow-color, rgba(100, 100, 255, 0.4)), inset 0 0 6px var(--glow-color, rgba(100, 100, 255, 0.1));
+}
+
+/* Glass effect scoped to card */
+.tc-card.fx-glass .tc-card__bg {
+  background: var(--card-glass-bg, rgba(255, 255, 255, 0.05));
+  backdrop-filter: blur(8px);
+}

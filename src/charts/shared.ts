@@ -855,8 +855,5 @@ document.addEventListener("click", (e) => {
   const titleEl = (e.target as HTMLElement).closest<HTMLElement>(".chart-card__title");
   if (!titleEl) return;
   const text = titleEl.textContent?.trim() ?? "";
-  // Find the chart-view container to infer chart type from registry
-  const chartView = titleEl.closest<HTMLElement>(".chart-view");
-  const chartType = chartView?.className.match(/chart-view/)?.[0] ? "" : "";
   if (text) sendClickMessage(`[Chart] "${text}" - selected`);
 });

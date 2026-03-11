@@ -221,7 +221,7 @@ function _registerChartTool(
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "MCP Dashboard",
-    version: "1.0.0",
+    version: "2.0.0",
   });
 
   // -- Shared HTML resource --
@@ -281,7 +281,7 @@ export function createServer(): McpServer {
       };
       const total = args.data.reduce((s, d) => s + d.value, 0);
       const summary = args.data
-        .map((d) => `${d.label}: ${d.value} (${((d.value / total) * 100).toFixed(1)}%)`)
+        .map((d) => `${d.label}: ${d.value} (${total > 0 ? ((d.value / total) * 100).toFixed(1) : "0.0"}%)`)
         .join(", ");
 
       return {
@@ -644,6 +644,148 @@ export function createServer(): McpServer {
           { type: "text", text: JSON.stringify(chartData) },
         ],
         structuredContent: chartData,
+      };
+    }
+  );
+
+  // -- Tool: render_chart_catalog --
+  registerAppTool(
+    server,
+    "render_chart_catalog",
+    {
+      title: "Chart Catalog",
+      description: "Show a visual catalog of every available chart type as a dashboard of mini previews. Click any card to learn more about that chart tool.",
+      inputSchema: {
+        theme: ThemeParam,
+      },
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async (args: { theme?: string }): Promise<CallToolResult> => {
+      // CSS-delegated charts spread c.data into the payload, so array data
+      // must be wrapped as { data: [...] } to land on payload.data correctly.
+      const charts: Array<{ type: string; title: string; data?: unknown; labels?: string[]; datasets?: Array<{ label: string; data: any[] }>; options?: unknown }> = [
+        // -- Canvas charts --
+        { type: "pie", title: "render_pie_chart", data: [
+          { label: "A", value: 40 }, { label: "B", value: 30 }, { label: "C", value: 20 }, { label: "D", value: 10 },
+        ]},
+        { type: "bar", title: "render_bar_chart", labels: ["Q1", "Q2", "Q3", "Q4"], datasets: [
+          { label: "Revenue", data: [12, 19, 8, 15] },
+        ]},
+        { type: "line", title: "render_line_chart", labels: ["Jan", "Feb", "Mar", "Apr", "May"], datasets: [
+          { label: "Users", data: [10, 25, 18, 35, 42] },
+        ]},
+        { type: "radar", title: "render_radar_chart", labels: ["Speed", "Power", "Range", "Durability", "Accuracy"], datasets: [
+          { label: "Score", data: [80, 65, 90, 50, 75] },
+        ]},
+        { type: "treemap", title: "render_treemap_chart", data: [
+          { label: "Tech", value: 40 }, { label: "Health", value: 25 }, { label: "Finance", value: 20 }, { label: "Energy", value: 15 },
+        ]},
+        { type: "sankey", title: "render_sankey_chart", data: [
+          { from: "Budget", to: "Marketing", flow: 30 }, { from: "Budget", to: "R&D", flow: 50 },
+          { from: "Budget", to: "Ops", flow: 20 }, { from: "Marketing", to: "Sales", flow: 30 },
+        ]},
+        { type: "wordcloud", title: "render_wordcloud_chart", data: [
+          { text: "AI", value: 90 }, { text: "Cloud", value: 70 }, { text: "Data", value: 60 },
+          { text: "API", value: 50 }, { text: "ML", value: 45 }, { text: "IoT", value: 35 },
+        ]},
+        { type: "boxplot", title: "render_boxplot_chart", labels: ["A", "B"], datasets: [
+          { label: "Group A", data: [[2, 5, 7, 8, 12, 15, 18]] }, { label: "Group B", data: [[3, 6, 9, 11, 14, 16, 20]] },
+        ]},
+        { type: "geo", title: "render_geo_chart", data: [
+          { country: "US", value: 80 }, { country: "DE", value: 60 }, { country: "IN", value: 50 }, { country: "BR", value: 35 }, { country: "AU", value: 25 },
+        ]},
+        // -- CSS-delegated charts --
+        // Dashboard spreads c.data then c into payload. For array data,
+        // ...c puts data:[array] which is what renderers read. Extra props
+        // go at root level so ...c spreads them into the payload.
+        { type: "bullet", title: "render_bullet_chart", data: {
+          label: "Revenue", actual: 275, target: 300, ranges: [150, 225, 300],
+        }},
+        { type: "lollipop", title: "render_lollipop_chart", data: [
+          { label: "Alpha", value: 85 }, { label: "Beta", value: 62 }, { label: "Gamma", value: 43 }, { label: "Delta", value: 91 },
+        ]},
+        { type: "dumbbell", title: "render_dumbbell_chart", data: [
+          { label: "Q1", before: 20, after: 45 }, { label: "Q2", before: 30, after: 60 }, { label: "Q3", before: 15, after: 55 },
+        ], beforeLabel: "Start", afterLabel: "End" } as any,
+        { type: "variance", title: "render_variance_chart", data: [
+          { label: "Jan", actual: 100, budget: 90 }, { label: "Feb", actual: 85, budget: 95 },
+          { label: "Mar", actual: 110, budget: 100 }, { label: "Apr", actual: 70, budget: 80 },
+        ]},
+        { type: "funnel", title: "render_funnel_chart", data: [
+          { label: "Visitors", value: 1000 }, { label: "Leads", value: 600 }, { label: "Qualified", value: 300 }, { label: "Won", value: 80 },
+        ]},
+        { type: "slope", title: "render_slope_chart", data: [
+          { label: "Product A", start: 30, end: 55 }, { label: "Product B", start: 50, end: 40 }, { label: "Product C", start: 20, end: 65 },
+        ], periodStart: "2024", periodEnd: "2025" } as any,
+        { type: "waffle", title: "render_waffle_chart", data: [
+          { label: "Complete", value: 73 }, { label: "Remaining", value: 27 },
+        ]},
+        { type: "radial_cluster", title: "render_radial_cluster", metrics: [
+          { label: "Uptime", value: 95, status: "good" }, { label: "Latency", value: 60, status: "warn" },
+          { label: "Errors", value: 25, status: "bad" }, { label: "CPU", value: 80, status: "good" },
+        ] } as any,
+        { type: "waterfall", title: "render_waterfall_chart", data: [
+          { label: "Start", value: 100 }, { label: "Sales", value: 50 }, { label: "Costs", value: -30 },
+          { label: "Tax", value: -15 }, { label: "End", value: 105, total: true },
+        ]},
+        { type: "heatmap", title: "render_heatmap_chart", data: {
+          rows: ["Mon", "Tue", "Wed"], columns: ["9am", "12pm", "3pm", "6pm"],
+          values: [[3, 7, 5, 2], [8, 4, 6, 9], [1, 5, 8, 3]],
+        }},
+        { type: "timeline", title: "render_timeline_chart", milestones: [
+          { label: "Research", status: "done", date: "Jan" },
+          { label: "Build", status: "active", date: "Mar" },
+          { label: "Launch", status: "pending", date: "Jun" },
+          { label: "Scale", status: "pending", date: "Sep" },
+        ] } as any,
+        // -- Hero types --
+        { type: "hero", title: "render_hero_metric", data: {
+          variant: "progress_ring", value: 87, unit: "%", label: "Completion", progress: 87,
+        }},
+      ];
+
+      const kpis = [
+        { label: "Total Chart Tools", value: 31, suffix: " tools" },
+        { label: "Themes", value: 20, suffix: " presets" },
+      ];
+
+      const chartData = {
+        type: "dashboard" as const,
+        title: "Chart Catalog",
+        kpis,
+        charts,
+        columns: 3,
+        theme: args.theme,
+        footer: { text: "mcp-dashboards", lastUpdated: "Also available: render_table, render_from_json, render_from_url, render_live_chart, poll_http" },
+      };
+
+      return {
+        content: [
+          { type: "text", text: "Chart Catalog: 22 visual previews of every embeddable chart type. Click any card to ask about it. Standalone-only tools (table, live, auto, URL) listed in footer." },
+          { type: "text", text: JSON.stringify(chartData) },
+        ],
+        structuredContent: chartData,
+      };
+    }
+  );
+
+  // -- Tool: render_theme_catalog --
+  registerAppTool(
+    server,
+    "render_theme_catalog",
+    {
+      title: "Theme Catalog",
+      description: "Show a visual catalog of all 20 available themes. Each card previews the theme's colors, typography, and effects. Click any card to use that theme.",
+      inputSchema: {},
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async (): Promise<CallToolResult> => {
+      return {
+        content: [
+          { type: "text", text: "Theme Catalog: 20 theme previews with color swatches, typography, and effects. Click any card to use it." },
+          { type: "text", text: JSON.stringify({ type: "theme_catalog" }) },
+        ],
+        structuredContent: { type: "theme_catalog" },
       };
     }
   );

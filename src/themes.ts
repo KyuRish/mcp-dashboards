@@ -935,7 +935,7 @@ export function resolveTheme(
 
 // ── Theme Application ───────────────────────────────────────────────────
 
-const PALETTE_TO_CSS: Record<keyof ColorPalette, string> = {
+export const PALETTE_TO_CSS: Record<keyof ColorPalette, string> = {
   bgBase: "--bg-base",
   bgCard: "--bg-card",
   bgCard2: "--bg-card-2",

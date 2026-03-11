@@ -5,7 +5,7 @@ mcp-name: io.github.KyuRish/mcp-dashboard
 ### Your AI can talk about data. Now it can show it.
 
 [![npm](https://img.shields.io/npm/v/mcp-dashboards)](https://www.npmjs.com/package/mcp-dashboards)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: FSL-1.1-MIT](https://img.shields.io/badge/License-FSL--1.1--MIT-blue.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)
 
@@ -66,18 +66,29 @@ Works in any MCP Apps-compatible client: **Claude Desktop**, **Claude Web**, **V
 
 ## What makes this different
 
-Other MCP chart tools generate static images. MCP Dashboard renders **interactive HTML** inside your conversation:
+Other MCP chart tools generate static images. MCP Dashboard renders **interactive HTML** inside your conversation.
+
+### Explore your data in-chat
 
 - **Hover tooltips** on every data point - no guessing values
-- **Click to select** any bar, slice, or point - accumulate selections and send them back to the AI for follow-up
-- **Drill-down** - click a bar to explore sub-data, breadcrumb navigation to go back
-- **Zoom & pan** - scroll-wheel zoom up to 12x on geo maps, treemaps, and heatmaps with hi-res re-rendering
+- **Click to select** any bar, slice, or point - selections feed back to the AI for follow-up questions
+- **Drill-down** into bar charts with breadcrumb navigation
+- **Zoom & pan** on geo maps, treemaps, and heatmaps - scroll-wheel zoom up to 12x with hi-res re-rendering
 - **Live polling** - real-time charts that auto-update from any API (stock prices, server metrics, crypto)
-- **Export anything** - PNG screenshots, CSV data, PPT slides (16:9 title + background), paginated A4 documents
-- **20 themes** - boardroom gold, neon cyberpunk, forest earth, clinical white - mix palettes, typography, and effects
-- **Shimmer effects** - animated gradient titles that actually export correctly to PNG
 - **KPI sparklines** - inline trend mini-charts in dashboard metric cards
-- **Responsive** - adapts to mobile viewports
+
+### Meeting in 5 minutes? Export and go
+
+- **PPT slides** - one-click download as a 16:9 title slide or background-ready image
+- **A4 documents** - paginated multi-page export with intelligent page breaks that never cut through a chart
+- **PNG** - per-chart screenshots with title and theme baked in
+- **CSV** - raw data export from any table
+
+Ask the AI to build your dashboard, click download, walk into the meeting.
+
+### 20 themes, 900+ combinations
+
+Boardroom gold, neon cyberpunk, forest earth, clinical white. Mix palettes, typography (8 options), and effects (shimmer, neon, glow, glass, lift). Animated gradient titles export correctly to PNG.
 
 **45+ chart types across 20 themes = 900+ visual combinations.** Every one of them interactive.
 
@@ -220,4 +231,4 @@ If MCP Dashboard is useful to you:
 
 ## License
 
-MIT
+[FSL-1.1-MIT](LICENSE) - Free to use for any purpose except building a competing commercial product. Each version converts to MIT two years after release. For commercial licensing, contact [contact@kyuish.com](mailto:contact@kyuish.com).

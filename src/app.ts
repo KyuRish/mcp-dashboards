@@ -1,5 +1,5 @@
 import { App } from "@modelcontextprotocol/ext-apps";
-import { setAppInstance, storeLastToolCall, getLastToolCall, getAppInstance, getChartEntry, getTypeToToolMap } from "./charts/shared.js";
+import { setAppInstance, storeLastToolCall, getLastToolCall, getAppInstance, getChartEntry, getTypeToToolMap, escapeHtml } from "./charts/shared.js";
 import "./styles.css";
 
 // Side-effect imports: each chart file self-registers via registerChart()
@@ -31,6 +31,7 @@ import "./charts/waterfall.js";
 import "./charts/heatmap.js";
 import "./charts/timeline.js";
 import "./charts/geo.js";
+import "./charts/theme-catalog.js";
 
 const root = document.getElementById("app")!;
 
@@ -46,7 +47,7 @@ root.innerHTML = `
 // autoResize disabled - we manually report size after each render to avoid
 // the fit-content measurement bug with CSS Grid + absolute canvases.
 const app = new App(
-  { name: "MCP Dashboard", version: "1.0.0" },
+  { name: "MCP Dashboard", version: "2.0.0" },
   {},
   { autoResize: false },
 );
@@ -83,7 +84,7 @@ function renderFromData(data: any): void {
     if (entry) {
       entry.render(root, data);
     } else {
-      root.innerHTML = `<div class="loading">Unknown chart type: ${data.type}</div>`;
+      root.innerHTML = `<div class="loading">Unknown chart type: ${escapeHtml(String(data.type))}</div>`;
     }
     reportSize();
   } catch (err) {
