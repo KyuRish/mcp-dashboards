@@ -47,7 +47,7 @@ root.innerHTML = `
 // autoResize disabled - we manually report size after each render to avoid
 // the fit-content measurement bug with CSS Grid + absolute canvases.
 const app = new App(
-  { name: "MCP Dashboard", version: "2.0.0" },
+  { name: "MCP Dashboards", version: "2.0.0" },
   {},
   { autoResize: false },
 );

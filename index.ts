@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Entry point for the MCP Dashboard server.
- * Run with: npx mcp-dashboard
+ * Entry point for the MCP Dashboards server.
+ * Run with: npx mcp-dashboards
  * Or: node dist/index.js [--stdio]
  */
 
@@ -51,7 +51,7 @@ async function startStreamableHTTPServer(
   });
 
   const httpServer = app.listen(port, () => {
-    console.log(`MCP Dashboard server listening on http://localhost:${port}/mcp`);
+    console.log(`MCP Dashboards server listening on http://localhost:${port}/mcp`);
   });
 
   const shutdown = () => {

@@ -1,5 +1,5 @@
 // ========================================================================
-//  MCP Dashboard - Composable Theme Engine
+//  MCP Dashboards - Composable Theme Engine
 //  Theme = ColorPalette + TypographySet + EffectPreset
 // ========================================================================
 

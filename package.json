@@ -71,7 +71,7 @@
     }
   },
   "bin": {
-    "mcp-dashboard": "dist/index.js"
+    "mcp-dashboards": "dist/index.js"
   },
   "keywords": [
     "mcp",

@@ -21,7 +21,7 @@ interface DrilldownLevel {
 interface BarData {
   title: string;
   labels: string[];
-  datasets: Array<{ label: string; data: number[]; colors?: string[] }>;
+  datasets: Array<{ label: string; data: (number | null)[]; colors?: string[] }>;
   options: {
     horizontal?: boolean;
     stacked?: boolean;
@@ -35,42 +35,40 @@ interface BarData {
   effects?: string;
 }
 
-export function renderBarChart(container: HTMLElement, payload: BarData): void {
-  const { title, options } = payload;
-  const isHorizontal = options.horizontal === true;
-  const isStacked = options.stacked === true;
+export interface BarDrilldownConfig {
+  card: HTMLElement;
+  title: string;
+  labels: string[];
+  datasets: Array<{ label: string; data: (number | null)[]; colors?: string[] }>;
+  horizontal?: boolean;
+  stacked?: boolean;
+  colors?: string[];
+  annotations?: any[];
+  drilldown?: Record<string, DrilldownLevel>;
+  shimmerClass?: string;
+  tickSize?: number;
+}
 
-  const theme = resolveTheme(payload.theme, {
-    palette: payload.palette,
-    typography: payload.typography,
-    effects: payload.effects,
-  });
-  if (theme) applyTheme(container, theme);
+/**
+ * Sets up a bar chart with drill-down support inside an existing card element.
+ * Returns a chart proxy for export buttons.
+ */
+export function initBarDrilldown(cfg: BarDrilldownConfig): { proxy: any } {
+  const { card, title, horizontal: isHorizontal = false, stacked: isStacked = false, shimmerClass = "", tickSize = 11 } = cfg;
 
-  const shimmerClass = theme?.effects.shimmerTitle ? " shimmer-text" : "";
+  // Add breadcrumb if not present
+  let bc = card.querySelector<HTMLElement>(".drilldown-breadcrumb");
+  if (!bc) {
+    bc = document.createElement("div");
+    bc.className = "drilldown-breadcrumb";
+    const body = card.querySelector(".chart-card__body");
+    if (body) card.insertBefore(bc, body);
+  }
 
-  container.innerHTML = `
-    <div class="chart-view">
-      <div class="card chart-card">
-        <div class="chart-card__header">
-          <div>
-            <div class="chart-card__title${shimmerClass}">${escapeHtml(title)}</div>
-            <div class="chart-card__subtitle">${payload.datasets.length} series - ${payload.labels.length} categories</div>
-          </div>
-        </div>
-        <div class="drilldown-breadcrumb"></div>
-        <div class="chart-card__body">
-          <canvas id="chart-canvas"></canvas>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Drill-down state
   interface HistoryEntry {
     title: string;
     labels: string[];
-    datasets: Array<{ label: string; data: number[]; colors?: string[] }>;
+    datasets: Array<{ label: string; data: (number | null)[]; colors?: string[] }>;
     annotations?: any[];
     drilldown?: Record<string, DrilldownLevel>;
   }
@@ -79,22 +77,20 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
   let currentChart: Chart | null = null;
 
   function updateBreadcrumb(): void {
-    const bc = container.querySelector<HTMLElement>(".drilldown-breadcrumb")!;
     if (history.length === 0) {
-      bc.innerHTML = "";
-      bc.style.display = "none";
+      bc!.innerHTML = "";
+      bc!.style.display = "none";
       return;
     }
-    bc.style.display = "flex";
+    bc!.style.display = "flex";
     const items = history.map((h, i) =>
       `<span class="drilldown-breadcrumb__item" data-level="${i}">${escapeHtml(h.title)}</span>`
     );
-    bc.innerHTML = items.join('<span class="drilldown-breadcrumb__sep">\u203A</span>');
+    bc!.innerHTML = items.join('<span class="drilldown-breadcrumb__sep">\u203A</span>');
 
-    bc.querySelectorAll<HTMLElement>(".drilldown-breadcrumb__item").forEach(item => {
+    bc!.querySelectorAll<HTMLElement>(".drilldown-breadcrumb__item").forEach(item => {
       item.addEventListener("click", () => {
         const level = parseInt(item.dataset.level ?? "0", 10);
-        // Pop history back to the clicked level
         const target = history[level];
         history.length = level;
         renderLevel(target.title, target.labels, target.datasets, target.annotations, target.drilldown);
@@ -105,36 +101,32 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
   function renderLevel(
     levelTitle: string,
     labels: string[],
-    datasets: Array<{ label: string; data: number[]; colors?: string[] }>,
+    datasets: Array<{ label: string; data: (number | null)[]; colors?: string[] }>,
     annotations?: any[],
     drilldown?: Record<string, DrilldownLevel>,
   ): void {
-    // Destroy previous chart
     if (currentChart) {
       currentChart.destroy();
       currentChart = null;
     }
 
-    // Update header text
-    const titleEl = container.querySelector<HTMLElement>(".chart-card__title");
+    const titleEl = card.querySelector<HTMLElement>(".chart-card__title");
     if (titleEl) {
       titleEl.textContent = levelTitle;
       if (shimmerClass) titleEl.className = `chart-card__title${shimmerClass}`;
     }
-    const subtitleEl = container.querySelector<HTMLElement>(".chart-card__subtitle");
+    const subtitleEl = card.querySelector<HTMLElement>(".chart-card__subtitle");
     if (subtitleEl) subtitleEl.textContent = `${datasets.length} series - ${labels.length} categories`;
 
     updateBreadcrumb();
 
-    // Ensure canvas exists (destroy removes it in some Chart.js versions)
-    let canvas = container.querySelector<HTMLCanvasElement>("#chart-canvas");
+    let canvas = card.querySelector<HTMLCanvasElement>("canvas");
     if (!canvas) {
       canvas = document.createElement("canvas");
-      canvas.id = "chart-canvas";
-      container.querySelector(".chart-card__body")!.appendChild(canvas);
+      card.querySelector(".chart-card__body")!.appendChild(canvas);
     }
 
-    const palette = resolveColors(options.colors, datasets.length);
+    const palette = resolveColors(cfg.colors, datasets.length);
     const hasDrilldown = drilldown && Object.keys(drilldown).length > 0;
 
     currentChart = new Chart(canvas, {
@@ -166,10 +158,8 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
           const el = elements[0];
           const label = labels[el.index];
 
-          // Check for drill-down
           if (hasDrilldown && drilldown![label]) {
             const sub = drilldown![label];
-            // Push current state to history
             history.push({ title: levelTitle, labels, datasets, annotations, drilldown });
             renderLevel(`${levelTitle} \u203A ${label}`, sub.labels, sub.datasets);
             return;
@@ -183,13 +173,13 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
             stacked: isStacked,
             border: { display: false },
             grid: { display: isHorizontal, color: getCSSVar("--border") },
-            ticks: { color: getCSSVar("--text-secondary"), font: { size: 11 } },
+            ticks: { color: getCSSVar("--text-secondary"), font: { size: tickSize } },
           },
           y: {
             stacked: isStacked,
             border: { display: false },
             grid: { display: !isHorizontal, color: getCSSVar("--border") },
-            ticks: { color: getCSSVar("--text-secondary"), font: { size: 11 }, padding: 8 },
+            ticks: { color: getCSSVar("--text-secondary"), font: { size: tickSize }, padding: 8 },
           },
         },
         plugins: {
@@ -197,7 +187,7 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
             display: datasets.length > 1,
             position: "top",
             align: "end",
-            labels: { color: getCSSVar("--text-secondary"), boxWidth: 10, padding: 12, font: { size: 11 } },
+            labels: { color: getCSSVar("--text-secondary"), boxWidth: 10, padding: 12, font: { size: tickSize } },
           },
           tooltip: {
             ...tooltipStyle(),
@@ -214,20 +204,63 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
     });
 
     deferResize(currentChart);
-
-    // Export/refresh buttons - attach once with a proxy that always uses the current chart
-    if (history.length === 0) {
-      const chartProxy = {
-        get toBase64Image() { return () => currentChart?.toBase64Image() ?? ""; },
-        get canvas() { return currentChart?.canvas; },
-      };
-      addExportButton(container, chartProxy as any, title);
-      addRefreshButton(container, () => (window as any).__mcpRefresh?.());
-    }
   }
 
-  // Initial render
-  renderLevel(title, payload.labels, payload.datasets, options.annotations, options.drilldown);
+  renderLevel(title, cfg.labels, cfg.datasets, cfg.annotations, cfg.drilldown);
+
+  const proxy = {
+    get toBase64Image() { return () => currentChart?.toBase64Image() ?? ""; },
+    get canvas() { return currentChart?.canvas; },
+  };
+
+  return { proxy };
+}
+
+export function renderBarChart(container: HTMLElement, payload: BarData): void {
+  const { title, options } = payload;
+
+  const theme = resolveTheme(payload.theme, {
+    palette: payload.palette,
+    typography: payload.typography,
+    effects: payload.effects,
+  });
+  if (theme) applyTheme(container, theme);
+
+  const shimmerClass = theme?.effects.shimmerTitle ? " shimmer-text" : "";
+
+  container.innerHTML = `
+    <div class="chart-view">
+      <div class="card chart-card">
+        <div class="chart-card__header">
+          <div>
+            <div class="chart-card__title${shimmerClass}">${escapeHtml(title)}</div>
+            <div class="chart-card__subtitle">${payload.datasets.length} series - ${payload.labels.length} categories</div>
+          </div>
+        </div>
+        <div class="drilldown-breadcrumb"></div>
+        <div class="chart-card__body">
+          <canvas id="chart-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const card = container.querySelector<HTMLElement>(".chart-card")!;
+  const { proxy } = initBarDrilldown({
+    card,
+    title,
+    labels: payload.labels,
+    datasets: payload.datasets,
+    horizontal: options.horizontal,
+    stacked: options.stacked,
+    colors: options.colors,
+    annotations: options.annotations,
+    drilldown: options.drilldown,
+    shimmerClass,
+  });
+
+  addExportButton(container, proxy as any, title);
+  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
 }
 
 registerChart("bar", "render_bar_chart", renderBarChart);

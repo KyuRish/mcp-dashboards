@@ -216,11 +216,11 @@ function _registerChartTool(
 }
 
 /**
- * Creates a new MCP Dashboard server instance.
+ * Creates a new MCP Dashboards server instance.
  */
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "MCP Dashboard",
+    name: "MCP Dashboards",
     version: "2.0.0",
   });
 

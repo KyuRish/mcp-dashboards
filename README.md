@@ -1,6 +1,6 @@
-# MCP Dashboard
+# MCP Dashboards
 
-mcp-name: io.github.KyuRish/mcp-dashboard
+<!-- mcp-name: io.github.KyuRish/mcp-dashboards -->
 
 ### Your AI can talk about data. Now it can show it.
 
@@ -9,15 +9,14 @@ mcp-name: io.github.KyuRish/mcp-dashboard
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)
 
-<!-- Screenshots - add 3-4 PNGs to assets/ and uncomment
 <p align="center">
-  <img src="assets/dashboard-boardroom.png" width="800" alt="Executive dashboard with KPIs, geo map, and charts" />
+  <img src="assets/demo.gif" width="400" alt="MCP Dashboards demo" />
+  <br>
+  <a href="assets/dashboard-example.png"><img src="assets/dashboard-example.png" width="115" height="220" alt="Infrastructure Command Center dashboard" /></a>&nbsp;
+  <a href="assets/chart-catalog.png"><img src="assets/chart-catalog.png" width="115" height="220" alt="Chart Catalog - 45+ chart types" /></a>&nbsp;
+  <a href="assets/theme-catalog.png"><img src="assets/theme-catalog.png" width="115" height="220" alt="Theme Catalog - 20 themes" /></a>
+  <br><sub>Click any thumbnail to see full size</sub>
 </p>
-<p align="center">
-  <img src="assets/gem-hero.png" width="400" alt="Gem hero metric" />
-  <img src="assets/geo-choropleth.png" width="400" alt="World choropleth map" />
-</p>
--->
 
 ## The problem
 
@@ -25,7 +24,7 @@ We use AI for everything - analysis, reports, strategy. But when it comes to act
 
 ## The solution
 
-MCP Dashboard renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 45+ chart types, 20 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
+MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 45+ chart types, 20 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
 
 ## Quick Start
 
@@ -64,9 +63,23 @@ npx mcp-dashboards
 
 Works in any MCP Apps-compatible client: **Claude Desktop**, **Claude Web**, **VS Code** (GitHub Copilot), **Goose**, **Postman**, **MCPJam**. ChatGPT support is rolling out.
 
+## Just ask
+
+No API to learn. Describe what you want in plain English:
+
+- *"Compare Q1 vs Q2 revenue by region as a bar chart"*
+- *"Show my portfolio allocation as a donut chart with the boardroom theme"*
+- *"Build a dashboard with monthly sales KPIs and a trend line"*
+- *"Visualize website traffic by country on a world map"*
+- *"Track Bitcoin price live, updating every 30 seconds"*
+- *"Show the conversion funnel from signup to purchase"*
+- *"Rank the team by performance using a radar chart"*
+
+The AI picks the right tool, formats your data, and renders the chart inline. Click any data point to ask follow-up questions.
+
 ## What makes this different
 
-Other MCP chart tools generate static images. MCP Dashboard renders **interactive HTML** inside your conversation.
+Other MCP chart tools generate static images. MCP Dashboards renders **interactive HTML** inside your conversation.
 
 ### Explore your data in-chat
 
@@ -84,7 +97,7 @@ Other MCP chart tools generate static images. MCP Dashboard renders **interactiv
 - **PNG** - per-chart screenshots with title and theme baked in
 - **CSV** - raw data export from any table
 
-Ask the AI to build your dashboard, click download, walk into the meeting.
+Ask the AI to build your dashboard. Hit the export dropdown - grab a 16:9 title slide, a background image, or a paginated A4 document. One click, presentation-ready.
 
 ### 20 themes, 900+ combinations
 
@@ -224,7 +237,7 @@ npm run dev     # watch mode
 
 ## Support
 
-If MCP Dashboard is useful to you:
+If MCP Dashboards is useful to you:
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)

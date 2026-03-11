@@ -27,6 +27,7 @@ import html2canvas from "html2canvas-pro";
 import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast, resolveShimmerForExport, addCanvasZoom } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 import { renderHeroRing, renderHeroWidget } from "./hero.js";
+import { initBarDrilldown } from "./bar.js";
 import { ALPHA2_TO_NUMERIC, NUMERIC_TO_ALPHA2, COLOR_SCALES } from "./geo.js";
 
 Chart.register(
@@ -583,56 +584,19 @@ function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): vo
   }
 
   if (chart.type === "bar") {
-    const labels = chart.labels ?? [];
-    const datasets = chart.datasets ?? [];
-    const palette = resolveColors(undefined, datasets.length);
-    const isStacked = (chart.options?.stacked as boolean) === true;
-    const isHorizontal = (chart.options?.horizontal as boolean) === true;
-
     const barTitle = chart.title ?? "chart";
-    const barChart = new Chart(canvas, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: datasets.map((ds: any, i: number) => {
-          const base = palette[i % palette.length];
-          const bg = ds.colors ? ds.colors.map((c: string) => c + "CC") : base + "CC";
-          const border = ds.colors ?? base;
-          return {
-            label: ds.label,
-            data: ds.data,
-            backgroundColor: bg,
-            borderColor: border,
-            borderWidth: 1,
-            borderRadius: 4,
-            borderSkipped: false,
-          };
-        }),
-      },
-      options: {
-        indexAxis: isHorizontal ? "y" : "x",
-        responsive: true,
-        maintainAspectRatio: false,
-        onClick: (_event, elements) => {
-          if (elements.length === 0) return;
-          const el = elements[0];
-          const label = labels[el.index];
-          const values = datasets.map((ds) => `${ds.label}: ${ds.data[el.index]?.toLocaleString()}`).join(", ");
-          sendClickMessage(`${label} (${values}) in "${barTitle}"`);
-        },
-        scales: {
-          x: { stacked: isStacked, border: { display: false }, grid: { display: isHorizontal, color: getCSSVar("--border") }, ticks: { color: getCSSVar("--text-secondary"), font: { size: 10 } } },
-          y: { stacked: isStacked, border: { display: false }, grid: { display: !isHorizontal, color: getCSSVar("--border") }, ticks: { color: getCSSVar("--text-secondary"), font: { size: 10 } } },
-        },
-        plugins: {
-          legend: { display: datasets.length > 1, position: "top", align: "end", labels: { color: getCSSVar("--text-secondary"), boxWidth: 8, font: { size: 10 } } },
-          tooltip: tooltipStyle(),
-        },
-      },
+    const barCard = canvas.closest<HTMLElement>(".chart-card")!;
+    const { proxy } = initBarDrilldown({
+      card: barCard,
+      title: barTitle,
+      labels: chart.labels ?? [],
+      datasets: chart.datasets ?? [],
+      horizontal: (chart.options?.horizontal as boolean) === true,
+      stacked: (chart.options?.stacked as boolean) === true,
+      drilldown: chart.options?.drilldown as any,
+      tickSize: 10,
     });
-    deferResize(barChart);
-    const barCard = canvas.closest<HTMLElement>(".chart-card");
-    if (barCard) addExportButton(barCard, barChart, barTitle);
+    addExportButton(barCard, proxy as any, barTitle);
     return;
   }
 
