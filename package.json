@@ -1,6 +1,7 @@
 {
   "name": "mcp-dashboards",
-  "version": "2.0.0",
+  "version": "2.0.1",
+  "mcpName": "io.github.KyuRish/mcp-dashboards",
   "type": "module",
   "description": "45+ interactive chart types inside any AI conversation - dashboards, KPIs, live polling, export to PNG/PPT/A4",
   "repository": {

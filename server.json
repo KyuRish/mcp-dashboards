@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.KyuRish/mcp-dashboards",
+  "description": "45+ interactive charts, dashboards, and KPIs inside any AI conversation",
+  "repository": {
+    "url": "https://github.com/KyuRish/mcp-dashboards",
+    "source": "github"
+  },
+  "version": "2.0.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "mcp-dashboards",
+      "version": "2.0.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": []
+    }
+  ]
+}
