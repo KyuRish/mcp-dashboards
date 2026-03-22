@@ -195,6 +195,7 @@ function _registerChartTool(
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args: Record<string, any>): Promise<CallToolResult> => {
       const chartData = {
@@ -259,6 +260,7 @@ export function createServer(): McpServer {
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args: {
       title: string;
@@ -313,6 +315,7 @@ export function createServer(): McpServer {
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args: {
       title: string;
@@ -368,6 +371,7 @@ export function createServer(): McpServer {
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args: {
       title: string;
@@ -511,6 +515,7 @@ export function createServer(): McpServer {
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args): Promise<CallToolResult> => {
       const chartData = {
@@ -582,6 +587,7 @@ export function createServer(): McpServer {
         layout: z.enum(["default", "hero-center", "kpi-top"]).optional().describe("Layout variant: default (hero above KPIs), hero-center (hero prominent), kpi-top (KPIs first)"),
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args: {
       title: string;
@@ -659,6 +665,7 @@ export function createServer(): McpServer {
         theme: ThemeParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args: { theme?: string }): Promise<CallToolResult> => {
       // CSS-delegated charts spread c.data into the payload, so array data
@@ -778,6 +785,7 @@ export function createServer(): McpServer {
       description: "Show a visual catalog of all 20 available themes. Each card previews the theme's colors, typography, and effects. Click any card to use that theme.",
       inputSchema: {},
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (): Promise<CallToolResult> => {
       return {
@@ -971,6 +979,7 @@ export function createServer(): McpServer {
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args): Promise<CallToolResult> => {
       const chartData = {
@@ -1015,6 +1024,7 @@ export function createServer(): McpServer {
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args): Promise<CallToolResult> => {
       const chartData = {
@@ -1065,6 +1075,7 @@ export function createServer(): McpServer {
         effects: EffectsParam,
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args): Promise<CallToolResult> => {
       const chartData = {
@@ -1107,6 +1118,7 @@ export function createServer(): McpServer {
         }).optional(),
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args): Promise<CallToolResult> => {
       const chartData = {
@@ -1144,6 +1156,7 @@ export function createServer(): McpServer {
         }).optional(),
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async (args): Promise<CallToolResult> => {
       try {
@@ -1192,6 +1205,7 @@ export function createServer(): McpServer {
       data: z.string().describe("File contents: base64-encoded binary or plain text"),
       encoding: z.enum(["base64", "utf-8"]).describe("How data is encoded"),
     },
+    { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     async (args) => {
       try {
         const sanitized = path.basename(args.filename);
@@ -1591,6 +1605,7 @@ export function createServer(): McpServer {
       method: z.enum(["GET", "POST"]).optional().describe("HTTP method. Default: GET"),
       body: z.string().optional().describe("Request body for POST requests"),
     },
+    { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     async (args) => {
       try {
         let fetchUrl: string;

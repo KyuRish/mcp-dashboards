@@ -242,6 +242,17 @@ If MCP Dashboards is useful to you:
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)
 
+## Privacy Policy
+
+MCP Dashboards runs entirely on your local machine. It does not collect, transmit, or store any user data, analytics, or telemetry.
+
+- **No data leaves your machine** unless you explicitly use `render_from_url` or `poll_http` to fetch from a URL you specify
+- **No accounts or authentication** required
+- **No cookies, tracking, or analytics**
+- **All chart rendering happens locally** in a sandboxed iframe - your data never touches an external server
+
+When using `poll_http` with presets, API credentials are stored in your local environment variables and are never exposed to the AI model or transmitted anywhere other than the API endpoint you configured.
+
 ## License
 
 [FSL-1.1-MIT](LICENSE) - Free to use for any purpose except building a competing commercial product. Each version converts to MIT two years after release. For commercial licensing, contact [contact@kyuish.com](mailto:contact@kyuish.com).
