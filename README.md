@@ -13,7 +13,7 @@
   <img src="assets/demo.gif" width="400" alt="MCP Dashboards demo" />
   <br>
   <a href="assets/dashboard-example.png"><img src="assets/dashboard-example.png" width="115" height="220" alt="Infrastructure Command Center dashboard" /></a>&nbsp;
-  <a href="assets/chart-catalog.png"><img src="assets/chart-catalog.png" width="115" height="220" alt="Chart Catalog - 45+ chart types" /></a>&nbsp;
+  <a href="assets/chart-catalog.png"><img src="assets/chart-catalog.png" width="115" height="220" alt="Chart Catalog - 31 chart tools" /></a>&nbsp;
   <a href="assets/theme-catalog.png"><img src="assets/theme-catalog.png" width="115" height="220" alt="Theme Catalog - 20 themes" /></a>
   <br><sub>Click any thumbnail to see full size</sub>
 </p>
@@ -24,7 +24,7 @@ We use AI for everything - analysis, reports, strategy. But when it comes to act
 
 ## The solution
 
-MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 45+ chart types, 20 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
+MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 31 tools covering 44+ chart subtypes (bar has stacked/drilldown, hero has 11 variants, etc.), 20 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
 
 ## Quick Start
 
@@ -77,33 +77,13 @@ No API to learn. Describe what you want in plain English:
 
 The AI picks the right tool, formats your data, and renders the chart inline. Click any data point to ask follow-up questions.
 
-## What makes this different
+## Interactive charts, not images
 
-Other MCP chart tools generate static images. MCP Dashboards renders **interactive HTML** inside your conversation.
+Every chart is **interactive HTML** rendered directly in your conversation:
 
-### Explore your data in-chat
-
-- **Hover tooltips** on every data point - no guessing values
-- **Click to select** any bar, slice, or point - selections feed back to the AI for follow-up questions
-- **Drill-down** into bar charts with breadcrumb navigation
-- **Zoom & pan** on geo maps, treemaps, and heatmaps - scroll-wheel zoom up to 12x with hi-res re-rendering
-- **Live polling** - real-time charts that auto-update from any API (stock prices, server metrics, crypto)
-- **KPI sparklines** - inline trend mini-charts in dashboard metric cards
-
-### Meeting in 5 minutes? Export and go
-
-- **PPT slides** - one-click download as a 16:9 title slide or background-ready image
-- **A4 documents** - paginated multi-page export with intelligent page breaks that never cut through a chart
-- **PNG** - per-chart screenshots with title and theme baked in
-- **CSV** - raw data export from any table
-
-Ask the AI to build your dashboard. Hit the export dropdown - grab a 16:9 title slide, a background image, or a paginated A4 document. One click, presentation-ready.
-
-### 20 themes, 900+ combinations
-
-Boardroom gold, neon cyberpunk, forest earth, clinical white. Mix palettes, typography (8 options), and effects (shimmer, neon, glow, glass, lift). Animated gradient titles export correctly to PNG.
-
-**45+ chart types across 20 themes = 900+ visual combinations.** Every one of them interactive.
+- **Explore in-chat** - hover tooltips, click-to-select (feeds back to the AI), drill-down with breadcrumbs, scroll-zoom up to 12x on maps and heatmaps
+- **Live polling** - real-time charts that auto-update from any API on a timer
+- **Export anywhere** - PPT (16:9 slides), A4 (paginated with smart page breaks), PNG, CSV
 
 <details>
 <summary><strong>All 31 Tools</strong></summary>
@@ -242,16 +222,9 @@ If MCP Dashboards is useful to you:
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)
 
-## Privacy Policy
+## Privacy
 
-MCP Dashboards runs entirely on your local machine. It does not collect, transmit, or store any user data, analytics, or telemetry.
-
-- **No data leaves your machine** unless you explicitly use `render_from_url` or `poll_http` to fetch from a URL you specify
-- **No accounts or authentication** required
-- **No cookies, tracking, or analytics**
-- **All chart rendering happens locally** in a sandboxed iframe - your data never touches an external server
-
-When using `poll_http` with presets, API credentials are stored in your local environment variables and are never exposed to the AI model or transmitted anywhere other than the API endpoint you configured.
+All processing happens locally. No data is collected, transmitted, or stored. The only network calls are `render_from_url` and `poll_http` - both require you to explicitly provide the URL. Credentials in env var presets never leave your machine.
 
 ## License
 
