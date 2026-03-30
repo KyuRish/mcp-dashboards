@@ -63,6 +63,10 @@ npx mcp-dashboards
 
 Works in any MCP Apps-compatible client: **Claude Desktop**, **Claude Web**, **VS Code** (GitHub Copilot), **Goose**, **Postman**, **MCPJam**. ChatGPT support is rolling out.
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/kyurish-mcp-dashboards).
+
 ## Just ask
 
 No API to learn. Describe what you want in plain English:
