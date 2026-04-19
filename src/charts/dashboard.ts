@@ -24,7 +24,7 @@ import { ChoroplethController, BubbleMapController, GeoFeature, ColorScale, Size
 import { feature } from "topojson-client";
 import worldAtlas from "world-atlas/countries-110m.json";
 import html2canvas from "html2canvas-pro";
-import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast, resolveShimmerForExport, addCanvasZoom } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast, resolveShimmerForExport, addCanvasZoom, isStandaloneMode } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 import { renderHeroRing, renderHeroWidget } from "./hero.js";
 import { initBarDrilldown } from "./bar.js";
@@ -292,13 +292,17 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
 
   document.addEventListener("click", () => downloadMenu?.classList.remove("open"));
 
-  // Overall dashboard refresh
+  // Overall dashboard refresh - hide in standalone preview (no MCP host to refresh against)
   const refreshBtn = container.querySelector<HTMLElement>("#dash-refresh");
-  refreshBtn?.addEventListener("click", () => {
-    refreshBtn.style.animation = "spin 0.6s linear";
-    refreshBtn.addEventListener("animationend", () => { refreshBtn.style.animation = ""; }, { once: true });
-    (window as any).__mcpRefresh?.();
-  });
+  if (isStandaloneMode()) {
+    refreshBtn?.remove();
+  } else {
+    refreshBtn?.addEventListener("click", () => {
+      refreshBtn.style.animation = "spin 0.6s linear";
+      refreshBtn.addEventListener("animationend", () => { refreshBtn.style.animation = ""; }, { once: true });
+      (window as any).__mcpRefresh?.();
+    });
+  }
 
   // Dashboard title click handler
   const brandEl = container.querySelector<HTMLElement>(".header__brand");

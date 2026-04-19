@@ -5,6 +5,8 @@
 ### Your AI can talk about data. Now it can show it.
 
 [![npm](https://img.shields.io/npm/v/mcp-dashboards)](https://www.npmjs.com/package/mcp-dashboards)
+[![Glama Quality](https://img.shields.io/badge/Glama_Quality-A-brightgreen)](https://glama.ai/mcp/servers/@KyuRish/mcp-dashboards)
+[![Glama Security](https://img.shields.io/badge/Glama_Security-A-brightgreen)](https://glama.ai/mcp/servers/@KyuRish/mcp-dashboards)
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/License-FSL--1.1--MIT-blue.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/kyuish)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?logo=github)](https://github.com/sponsors/KyuRish)
@@ -14,7 +16,7 @@
   <br>
   <a href="assets/dashboard-example.png"><img src="assets/dashboard-example.png" width="115" height="220" alt="Infrastructure Command Center dashboard" /></a>&nbsp;
   <a href="assets/chart-catalog.png"><img src="assets/chart-catalog.png" width="115" height="220" alt="Chart Catalog - 31 chart tools" /></a>&nbsp;
-  <a href="assets/theme-catalog.png"><img src="assets/theme-catalog.png" width="115" height="220" alt="Theme Catalog - 20 themes" /></a>
+  <a href="assets/theme-catalog.png"><img src="assets/theme-catalog.png" width="115" height="220" alt="Theme Catalog - 21 themes" /></a>
   <br><sub>Click any thumbnail to see full size</sub>
 </p>
 
@@ -24,7 +26,7 @@ We use AI for everything - analysis, reports, strategy. But when it comes to act
 
 ## The solution
 
-MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 31 tools covering 44+ chart subtypes (bar has stacked/drilldown, hero has 11 variants, etc.), 20 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
+MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 31 tools covering 44+ chart subtypes (bar has stacked/drilldown, hero has 11 variants, etc.), 21 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
 
 ## Quick Start
 
@@ -150,7 +152,7 @@ Every chart is **interactive HTML** rendered directly in your conversation:
 
 ## Themes
 
-20 built-in themes. Pass `theme` to any tool.
+21 built-in themes. Pass `theme` to any tool.
 
 | Family | Themes |
 |--------|--------|
@@ -158,6 +160,7 @@ Every chart is **interactive HTML** rendered directly in your conversation:
 | **Black/AI** | `black-tron` (cyan neon), `black-elegance` (warm gold), `black-matrix` (green hacker) |
 | **Forest** | `forest-amber` (autumn), `forest-earth` (terracotta) |
 | **Sky** | `sky-light` (airy blue), `sky-ocean` (deep navy), `sky-twilight` (sunset) |
+| **Office** | `office-red` (corporate red, white bg - report-ready) |
 | **Gray/ML** | `gray-hf` (warm yellow accent), `gray-copilot` (teal on dark) |
 
 Mix-and-match with `palette`, `typography` (8 options: system, mono, professional, editorial, bold, techno, cyberpunk, luxury), and `effects` (5 presets: none, subtle, shimmer, neon, energetic).
@@ -199,7 +202,17 @@ For public APIs, use the URL directly:
 
 Built on [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps). You ask the AI to visualize data, it calls the right tool, and the chart renders inline in your conversation. Self-contained - zero CDN, zero external requests.
 
-**Requirements:** Node.js 18+ and an MCP Apps-compatible client.
+**MCP Apps supported** (inline rendering): Claude Desktop, VS Code Insiders + MCP Apps extension, Goose, Postman.
+
+**No MCP Apps support?** No problem. When the server detects your client can't render inline, every chart response includes:
+- A clickable `http://localhost:XXXX/chart/{id}` link - opens the full interactive dashboard in your default browser
+- A standalone HTML file (`file:///...chart-{id}.html`) - self-contained, works offline, can be emailed or archived
+
+Works in Claude Code, Cursor, older VS Code, and any other MCP client. Tool annotations (`readOnlyHint`, `idempotentHint`, `openWorldHint`) help clients reason about tool behavior.
+
+**Opt-out**: set env var `MCP_DASHBOARDS_DISABLE_PREVIEW=1` to skip the preview links entirely.
+
+**Requirements:** Node.js 18+.
 
 <details>
 <summary><strong>Contributing</strong></summary>
@@ -224,7 +237,7 @@ If MCP Dashboards is useful to you:
 
 ## Privacy
 
-All processing happens locally. No data is collected, transmitted, or stored. The only network calls are `render_from_url` and `poll_http` - both require you to explicitly provide the URL. Credentials in env var presets never leave your machine.
+All processing happens locally. No data is collected, transmitted, or stored. External network calls are `render_from_url` and `poll_http` - both require you to explicitly provide the URL. Credentials in env var presets never leave your machine. The browser preview server binds only to `127.0.0.1` (localhost) and is not reachable from other devices.
 
 ## License
 

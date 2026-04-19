@@ -594,6 +594,37 @@ export const PALETTES: Record<string, ColorPalette> = {
     cardGlassBg: "rgba(16,14,32,0.88)",
   },
 
+  // ── Office/Report Family ───────────────────────────────────────────────
+
+  "office-red": {
+    bgBase: "#F8F8FA",
+    bgCard: "#FFFFFF",
+    bgCard2: "#FAFAFA",
+    bgHeader: "#FFFFFF",
+    border: "rgba(235,0,0,0.10)",
+    borderMd: "rgba(235,0,0,0.18)",
+    textPrimary: "#1A1A1A",
+    textSecondary: "#4A4A4A",
+    textMuted: "#9A9A9A",
+    accent: "#EB0000",
+    accentMuted: "#FFDEDE",
+    positive: "#00C8BC",
+    positiveBg: "#D1FFFB",
+    negative: "#EB0000",
+    negativeBg: "#FFDEDE",
+    neutral: "#95008A",
+    neutralBg: "#F6D6F4",
+    c1: "#EB0000", c2: "#95008A", c3: "#3300FB",
+    c4: "#00C8BC", c5: "#D40000", c6: "#6A0060", c7: "#2200AA",
+    shadowCard: "0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)",
+    shadowHover: "0 4px 16px rgba(235,0,0,0.12)",
+    gradientStart: "#EB0000",
+    gradientEnd: "#95008A",
+    glowColor: "rgba(235,0,0,0.25)",
+    bgGradientMid: "#FFF5F5",
+    cardGlassBg: "#FFFFFF",
+  },
+
   // ── Gray/ML Family ────────────────────────────────────────────────────
 
   "gray-hf": {
@@ -884,6 +915,14 @@ export const THEME_PRESETS: Record<string, ThemePreset> = {
     palette: PALETTES["sky-twilight"],
     typography: TYPOGRAPHY_SETS.cyberpunk,
     effects: EFFECT_PRESETS.neon,
+  },
+
+  // ── Office/Report Family ─────────────────────────────────────────────
+  "office-red": {
+    name: "office-red",
+    palette: PALETTES["office-red"],
+    typography: TYPOGRAPHY_SETS.system,
+    effects: EFFECT_PRESETS.none,
   },
 
   // ── Gray/ML Family ──────────────────────────────────────────────────

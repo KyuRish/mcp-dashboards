@@ -1,4 +1,5 @@
 import {
+  getUiCapability,
   registerAppResource,
   registerAppTool,
   RESOURCE_MIME_TYPE,
@@ -13,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { getPreviewUrls } from "./preview-server.js";
 
 // Works both from source (server.ts) and compiled (dist/server.js)
 const __filename = fileURLToPath(import.meta.url);
@@ -205,15 +207,45 @@ function _registerChartTool(
         typography: args.typography,
         effects: args.effects,
       };
-      return {
-        content: [
-          { type: "text", text: summarize(args) },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, summarize(args));
     },
   );
+}
+
+// Tracks whether each server's connected client supports MCP Apps inline rendering.
+// Set via oninitialized callback in createServer.
+const _clientSupportsInline = new WeakMap<McpServer, boolean>();
+
+// Builds the standard tool response. If the client doesn't support MCP Apps
+// inline rendering, appends browser preview links (localhost HTTP + standalone file)
+// to the text content. MCP Apps clients only get the structuredContent - they
+// already render the chart inline, so preview URLs would be redundant clutter.
+async function _buildChartResult(server: McpServer, chartData: any, summary: string): Promise<CallToolResult> {
+  const content: Array<{ type: "text"; text: string }> = [
+    { type: "text", text: summary },
+  ];
+
+  if (!_clientSupportsInline.get(server)) {
+    const urls = await getPreviewUrls(chartData);
+    if (urls) {
+      content.push({
+        type: "text",
+        text:
+          `\n## View this chart\n` +
+          `Your AI client doesn't render MCP Apps inline, so use one of these links to see the interactive chart in your browser:\n\n` +
+          `**Click to open (recommended):** ${urls.httpUrl}\n` +
+          `  - Opens instantly in your default browser\n` +
+          `  - Only works while this MCP server is running\n\n` +
+          `**Save or share:** ${urls.fileUrl}\n` +
+          `  - Self-contained HTML file on your disk\n` +
+          `  - Works offline, survives server restart, can be emailed or archived\n`,
+      });
+    }
+  }
+
+  content.push({ type: "text", text: JSON.stringify(chartData) });
+
+  return { content, structuredContent: chartData };
 }
 
 /**
@@ -224,6 +256,13 @@ export function createServer(): McpServer {
     name: "MCP Dashboards",
     version: "2.0.0",
   });
+
+  // After initialize handshake, detect if client supports MCP Apps inline rendering.
+  // Clients that do will see the interactive chart; those that don't get preview URLs.
+  (server.server as any).oninitialized = () => {
+    const caps: any = (server.server as any).getClientCapabilities?.();
+    _clientSupportsInline.set(server, !!getUiCapability(caps));
+  };
 
   // -- Shared HTML resource --
   registerAppResource(
@@ -286,13 +325,7 @@ export function createServer(): McpServer {
         .map((d) => `${d.label}: ${d.value} (${total > 0 ? ((d.value / total) * 100).toFixed(1) : "0.0"}%)`)
         .join(", ");
 
-      return {
-        content: [
-          { type: "text", text: `${args.title}: ${summary}` },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, `${args.title}: ${summary}`);
     }
   );
 
@@ -342,13 +375,7 @@ export function createServer(): McpServer {
         .map((ds) => `${ds.label}: [${ds.data.join(", ")}]`)
         .join("; ");
 
-      return {
-        content: [
-          { type: "text", text: `${args.title} - ${summary}` },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, `${args.title} - ${summary}`);
     }
   );
 
@@ -398,13 +425,7 @@ export function createServer(): McpServer {
         .map((ds) => `${ds.label}: [${ds.data.join(", ")}]`)
         .join("; ");
 
-      return {
-        content: [
-          { type: "text", text: `${args.title} - ${summary}` },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, `${args.title} - ${summary}`);
     }
   );
 
@@ -526,13 +547,7 @@ export function createServer(): McpServer {
       const variant = args.variant || "big_number";
       const summary = `${args.title}: [${variant}] ${args.value ?? ""}${args.unit ? " " + args.unit : ""}`;
 
-      return {
-        content: [
-          { type: "text", text: summary },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, summary);
     }
   );
 
@@ -644,13 +659,7 @@ export function createServer(): McpServer {
         parts.push(`Hero: ${heroCount} widget${heroCount > 1 ? "s" : ""}`);
       }
 
-      return {
-        content: [
-          { type: "text", text: parts.join(" | ") },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, parts.join(" | "));
     }
   );
 
@@ -766,13 +775,7 @@ export function createServer(): McpServer {
         footer: { text: "mcp-dashboards", lastUpdated: "Also available: render_table, render_from_json, render_from_url, render_live_chart, poll_http" },
       };
 
-      return {
-        content: [
-          { type: "text", text: "Chart Catalog: 22 visual previews of every embeddable chart type. Click any card to ask about it. Standalone-only tools (table, live, auto, URL) listed in footer." },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, "Chart Catalog: 22 visual previews of every embeddable chart type. Click any card to ask about it. Standalone-only tools (table, live, auto, URL) listed in footer.");
     }
   );
 
@@ -782,7 +785,7 @@ export function createServer(): McpServer {
     "render_theme_catalog",
     {
       title: "Theme Catalog",
-      description: "Show a visual catalog of all 20 available themes. Each card previews the theme's colors, typography, and effects. Click any card to use that theme.",
+      description: "Show a visual catalog of all 21 available themes. Each card previews the theme's colors, typography, and effects. Click any card to use that theme.",
       inputSchema: {},
       _meta: { ui: { resourceUri: RESOURCE_URI } },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -996,13 +999,7 @@ export function createServer(): McpServer {
         .map((ds) => `${ds.label}: ${ds.data.length} points`)
         .join("; ");
 
-      return {
-        content: [
-          { type: "text", text: `${args.title} - ${summary}` },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, `${args.title} - ${summary}`);
     }
   );
 
@@ -1041,13 +1038,7 @@ export function createServer(): McpServer {
       const last = args.data[args.data.length - 1];
       const change = last ? ((last.c - first.o) / first.o * 100).toFixed(2) : "0";
 
-      return {
-        content: [
-          { type: "text", text: `${args.title}: ${args.data.length} bars, ${first?.date ?? "?"} to ${last?.date ?? "?"}, change: ${change}%` },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, `${args.title}: ${args.data.length} bars, ${first?.date ?? "?"} to ${last?.date ?? "?"}, change: ${change}%`);
     }
   );
 
@@ -1090,13 +1081,7 @@ export function createServer(): McpServer {
         effects: args.effects,
       };
 
-      return {
-        content: [
-          { type: "text", text: `${args.title}: ${args.rows.length} rows, ${args.columns.length} columns` },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, `${args.title}: ${args.rows.length} rows, ${args.columns.length} columns`);
     }
   );
 
@@ -1128,13 +1113,7 @@ export function createServer(): McpServer {
         options: args.options ?? {},
       };
 
-      return {
-        content: [
-          { type: "text", text: `Auto-visualizing: ${args.title}` },
-          { type: "text", text: JSON.stringify(chartData) },
-        ],
-        structuredContent: chartData,
-      };
+      return await _buildChartResult(server, chartData, `Auto-visualizing: ${args.title}`);
     }
   );
 
@@ -1179,13 +1158,7 @@ export function createServer(): McpServer {
           options: args.options ?? {},
         };
 
-        return {
-          content: [
-            { type: "text", text: `Fetched and visualizing: ${args.title} (from ${args.url})` },
-            { type: "text", text: JSON.stringify(chartData) },
-          ],
-          structuredContent: chartData,
-        };
+        return await _buildChartResult(server, chartData, `Fetched and visualizing: ${args.title} (from ${args.url})`);
       } catch (err: any) {
         return {
           content: [{ type: "text", text: `Error fetching ${args.url}: ${err.message}` }],

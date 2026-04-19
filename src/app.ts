@@ -161,7 +161,13 @@ app.ontoolresult = (result) => {
   }
 };
 
-app.connect().catch((err) => {
-  console.error("Failed to connect to host:", err);
-  root.innerHTML = `<div class="loading">Connection failed. Please retry.</div>`;
-});
+// Standalone preview mode: if chart data is pre-injected (browser preview fallback),
+// render immediately without connecting to the MCP host.
+if ((window as any).__CHART_DATA__) {
+  renderFromData((window as any).__CHART_DATA__);
+} else {
+  app.connect().catch((err) => {
+    console.error("Failed to connect to host:", err);
+    root.innerHTML = `<div class="loading">Connection failed. Please retry.</div>`;
+  });
+}

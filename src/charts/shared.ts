@@ -11,6 +11,24 @@ export function getAppInstance(): App | null {
   return _app;
 }
 
+/** True when running in browser preview mode (no MCP host available) */
+export function isStandaloneMode(): boolean {
+  return typeof window !== "undefined" && !!(window as any).__CHART_DATA__;
+}
+
+/** Trigger a native browser download using a data URL. Works when there's no MCP host. */
+function browserDownload(filename: string, data: string, mimeType: string, isBase64: boolean): void {
+  const href = isBase64
+    ? `data:${mimeType};base64,${data}`
+    : `data:${mimeType};charset=utf-8,${encodeURIComponent(data)}`;
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 // -- Click position tracking --
 // MCP Apps iframes are sized to full content height (no internal scroll).
 // `position: fixed` equals `position: absolute` in this context, so we
@@ -42,11 +60,21 @@ function ensureTray(): HTMLElement {
   `;
 
   _tray.querySelector(".selection-tray__ask")!.addEventListener("click", () => {
-    if (!_app || _selections.length === 0) return;
+    if (_selections.length === 0) return;
     const message = _selections.length === 1
       ? `Tell me more about: ${_selections[0]}`
       : `Tell me about these:\n${_selections.map((s) => `- ${s}`).join("\n")}`;
 
+    // Standalone preview: no chat to send to - copy to clipboard instead
+    if (isStandaloneMode()) {
+      navigator.clipboard?.writeText(message)
+        .then(() => showToast("Copied to clipboard - paste into your AI chat"))
+        .catch(() => showToast("Clipboard blocked - select text manually", true));
+      clearSelections();
+      return;
+    }
+
+    if (!_app) return;
     _app.sendMessage({
       role: "user",
       content: [{ type: "text", text: message }],
@@ -398,6 +426,16 @@ export function showToast(message: string, isError = false): void {
 
 /** Save a file via the server-side save_file tool (bypasses iframe sandbox) */
 async function saveViaServer(filename: string, data: string, encoding: "base64" | "utf-8"): Promise<void> {
+  // Standalone preview: no MCP host - use native browser download
+  if (isStandaloneMode()) {
+    const mimeType = filename.endsWith(".csv") ? "text/csv"
+      : filename.endsWith(".png") ? "image/png"
+      : "application/octet-stream";
+    browserDownload(filename, data, mimeType, encoding === "base64");
+    showToast(`Downloaded ${filename}`);
+    return;
+  }
+
   if (!_app) { showToast("Not connected", true); return; }
   try {
     const result = await _app.callServerTool({
@@ -625,11 +663,14 @@ export function addHtmlExportButton(
   getOrCreateActions(header).appendChild(btn);
 }
 
-/** Add a refresh button to a chart card header */
+/** Add a refresh button to a chart card header. Hidden in standalone preview mode. */
 export function addRefreshButton(
   container: HTMLElement,
   onRefresh: () => void
 ): void {
+  // Standalone preview has no MCP host to re-invoke the tool against
+  if (isStandaloneMode()) return;
+
   const header = container.querySelector(".chart-card__header");
   if (!header) return;
 
