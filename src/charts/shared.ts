@@ -16,6 +16,17 @@ export function isStandaloneMode(): boolean {
   return typeof window !== "undefined" && !!(window as any).__CHART_DATA__;
 }
 
+/** Sanitize a filename - replace path separators and Windows-reserved chars. */
+function sanitizeFilename(name: string): string {
+  const INVALID = /[\\/:*?"<>|\x00-\x1f]/g;
+  const extMatch = name.match(/\.[A-Za-z0-9]{1,5}$/);
+  const ext = extMatch ? extMatch[0] : "";
+  const base = ext ? name.slice(0, -ext.length) : name;
+  let out = (base.replace(INVALID, "-").trim() || "chart") + ext;
+  if (out.length > 200) out = out.slice(0, 200 - ext.length) + ext;
+  return out;
+}
+
 /** Trigger a native browser download using a data URL. Works when there's no MCP host. */
 function browserDownload(filename: string, data: string, mimeType: string, isBase64: boolean): void {
   const href = isBase64
@@ -23,7 +34,7 @@ function browserDownload(filename: string, data: string, mimeType: string, isBas
     : `data:${mimeType};charset=utf-8,${encodeURIComponent(data)}`;
   const link = document.createElement("a");
   link.href = href;
-  link.download = filename;
+  link.download = sanitizeFilename(filename);
   document.body.appendChild(link);
   link.click();
   link.remove();

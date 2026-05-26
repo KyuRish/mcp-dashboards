@@ -204,13 +204,23 @@ Built on [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps). You a
 
 **MCP Apps supported** (inline rendering): Claude Desktop, VS Code Insiders + MCP Apps extension, Goose, Postman.
 
-**No MCP Apps support?** No problem. When the server detects your client can't render inline, every chart response includes:
-- A clickable `http://localhost:XXXX/chart/{id}` link - opens the full interactive dashboard in your default browser
-- A standalone HTML file (`file:///...chart-{id}.html`) - self-contained, works offline, can be emailed or archived
+**No MCP Apps support?** No problem. Every chart response also includes a clickable link to the same interactive chart in your browser:
+- `http://localhost:PORT/chart/{id}` - the clickable link in chat. Backed by a tiny same-machine HTTP server bound to 127.0.0.1, lazy-started on the first preview request.
+- `file:///.../chart-{id}.html` - the persistent shareable artifact. Same HTML bytes, written to disk so you can email, archive, or open it after the server has shut down.
 
-Works in Claude Code, Cursor, older VS Code, and any other MCP client. Tool annotations (`readOnlyHint`, `idempotentHint`, `openWorldHint`) help clients reason about tool behavior.
+Why both: Claude Code (VS Code) strips `file://`, `vscode://`, and `command://` URL schemes from chat markdown, so only `http://` produces a working clickable link. The file:// path is provided for sharing and offline viewing. Tool annotations (`readOnlyHint`, `idempotentHint`, `openWorldHint`) help clients reason about tool behavior.
 
-**Opt-out**: set env var `MCP_DASHBOARDS_DISABLE_PREVIEW=1` to skip the preview links entirely.
+## Storage and Cleanup
+
+Chart HTML files are written to `<system temp>/mcp-dashboards/`. They persist for **7 days by default** and are then auto-deleted at next server startup. The chart's built-in download button (PNG / PPT / A4) is the recommended way to save anything permanently.
+
+**Manual cleanup tools:**
+- Ask your AI to "list chart files" or "show me the chart files on disk" - invokes `list_chart_files`
+- Ask your AI to "delete all chart files" or "delete chart files older than 1 day" - invokes `delete_chart_files`
+
+**Env vars:**
+- `MCP_DASHBOARDS_RETAIN_DAYS=N` - change auto-cleanup window (default 7, set to 0 to disable auto-cleanup)
+- `MCP_DASHBOARDS_DISABLE_PREVIEW=1` - kill switch: do not write any HTML file to disk, do not start the preview server, do not emit preview links. Inline-rendering clients still work; non-MCP-Apps clients lose the browser fallback.
 
 **Requirements:** Node.js 18+.
 
@@ -237,7 +247,7 @@ If MCP Dashboards is useful to you:
 
 ## Privacy
 
-All processing happens locally. No data is collected, transmitted, or stored. External network calls are `render_from_url` and `poll_http` - both require you to explicitly provide the URL. Credentials in env var presets never leave your machine. The browser preview server binds only to `127.0.0.1` (localhost) and is not reachable from other devices.
+All processing happens locally. No data is collected, transmitted, or stored externally. External network calls are `render_from_url` and `poll_http` - both require you to explicitly provide the URL. Credentials in env var presets never leave your machine. The browser preview HTTP server binds only to `127.0.0.1` (localhost) and is not reachable from other devices. Chart preview HTML files are written to your system temp folder under `mcp-dashboards/` and auto-deleted after 7 days (configurable). Use `MCP_DASHBOARDS_DISABLE_PREVIEW=1` to disable both the preview server and file writes entirely.
 
 ## License
 

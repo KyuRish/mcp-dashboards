@@ -1,5 +1,4 @@
 import {
-  getUiCapability,
   registerAppResource,
   registerAppTool,
   RESOURCE_MIME_TYPE,
@@ -14,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { getPreviewUrls } from "./preview-server.js";
+import { getPreviewUrls, evictChartFromCache, TEMP_DIR, CHART_FILENAME_RE } from "./preview-server.js";
 
 // Works both from source (server.ts) and compiled (dist/server.js)
 const __filename = fileURLToPath(import.meta.url);
@@ -35,7 +34,7 @@ const PieDataItem = z.object({
 const ColorsOption = z.array(z.string()).optional().describe("Custom color palette as hex codes (e.g. ['#FF6384', '#36A2EB']). Uses default palette if omitted.");
 
 // Shared theme parameters for all chart tools
-const ThemeParam = z.string().optional().describe("Theme preset: boardroom, corporate, sales-floor, golden-treasury, clinical, startup, ops-control, tokyo-midnight, zen-garden, consultant, black-tron, black-elegance, black-matrix, forest-amber, forest-earth, sky-light, sky-ocean, sky-twilight, gray-hf, gray-copilot");
+const ThemeParam = z.string().optional().describe("Theme preset: boardroom, corporate, sales-floor, golden-treasury, clinical, startup, ops-control, tokyo-midnight, zen-garden, consultant, black-tron, black-elegance, black-matrix, forest-amber, forest-earth, sky-light, sky-ocean, sky-twilight, gray-hf, gray-copilot, office-red");
 const PaletteParam = z.string().optional().describe("Override palette only (mix-and-match)");
 const TypographyParam = z.string().optional().describe("Override typography: professional, luxury, cyberpunk, editorial, mono, bold, system, techno");
 const EffectsParam = z.string().optional().describe("Override effects: none, subtle, shimmer, neon, energetic");
@@ -212,40 +211,59 @@ function _registerChartTool(
   );
 }
 
-// Tracks whether each server's connected client supports MCP Apps inline rendering.
-// Set via oninitialized callback in createServer.
-const _clientSupportsInline = new WeakMap<McpServer, boolean>();
+// Builds the standard tool response. Writes a self-contained HTML file for the
+// chart AND lazy-starts a same-machine HTTP server (127.0.0.1, random port) so
+// non-MCP-Apps clients can view the chart in their browser. Inline-rendering
+// clients (Claude Desktop, VS Code Insiders) just use structuredContent and
+// ignore the extra link. Opt out entirely with MCP_DASHBOARDS_DISABLE_PREVIEW=1.
+//
+// Why both URLs:
+//   http://localhost:PORT/chart/{id} - the clickable link. Claude Code's react-
+//     markdown strips file://, vscode://, command:// schemes, so http:// is
+//     the only URL scheme that produces a working clickable link in chat.
+//   file:///.../chart-{id}.html - the persistent/shareable artifact. Same HTML
+//     bytes, written to disk so users can email, archive, or open after the
+//     server has shut down.
+//
+// The summary text carries a ready-to-paste markdown link with an explicit
+// instruction for the AI to surface it in the reply. Claude Code's bug #15412
+// hides the raw content array when structuredContent is present, so embedding
+// the link in the summary (which the AI then echoes into chat) is the only
+// reliable way to make a URL clickable for the user.
+async function _buildChartResult(_server: McpServer, chartData: any, summary: string): Promise<CallToolResult> {
+  const urls = await getPreviewUrls(chartData);
 
-// Builds the standard tool response. If the client doesn't support MCP Apps
-// inline rendering, appends browser preview links (localhost HTTP + standalone file)
-// to the text content. MCP Apps clients only get the structuredContent - they
-// already render the chart inline, so preview URLs would be redundant clutter.
-async function _buildChartResult(server: McpServer, chartData: any, summary: string): Promise<CallToolResult> {
+  // Mirror preview URLs into structuredContent for clients that surface it
+  // (e.g. Claude Code dumps structuredContent as JSON). Renderers ignore
+  // unknown fields, so MCP Apps clients are unaffected.
+  const enrichedChartData = urls
+    ? { ...chartData, preview: { browser: urls.httpUrl, file: urls.fileUrl } }
+    : chartData;
+
+  const enrichedSummary = urls
+    ? `${summary}\n\n[Open chart in browser](${urls.httpUrl}) - clickable link to view the interactive chart. AI assistant: please include this link verbatim in your reply so the user can click it. The standalone HTML file at ${urls.fileUrl} can be saved or shared (auto-deleted after 7 days). The user can ask you to delete chart files anytime via the delete_chart_files tool.`
+    : summary;
+
   const content: Array<{ type: "text"; text: string }> = [
-    { type: "text", text: summary },
+    { type: "text", text: enrichedSummary },
   ];
 
-  if (!_clientSupportsInline.get(server)) {
-    const urls = await getPreviewUrls(chartData);
-    if (urls) {
-      content.push({
-        type: "text",
-        text:
-          `\n## View this chart\n` +
-          `Your AI client doesn't render MCP Apps inline, so use one of these links to see the interactive chart in your browser:\n\n` +
-          `**Click to open (recommended):** ${urls.httpUrl}\n` +
-          `  - Opens instantly in your default browser\n` +
-          `  - Only works while this MCP server is running\n\n` +
-          `**Save or share:** ${urls.fileUrl}\n` +
-          `  - Self-contained HTML file on your disk\n` +
-          `  - Works offline, survives server restart, can be emailed or archived\n`,
-      });
-    }
+  if (urls) {
+    content.push({
+      type: "text",
+      text:
+        `\n## View this chart\n` +
+        `If the chart renders inline above, you're done. Otherwise click the link below:\n\n` +
+        `**[Open chart in browser](${urls.httpUrl})**\n\n` +
+        `Or save/share the standalone HTML file: ${urls.fileUrl}\n` +
+        `- Auto-deleted after ${process.env.MCP_DASHBOARDS_RETAIN_DAYS ?? "7"} days (configure via MCP_DASHBOARDS_RETAIN_DAYS, 0 disables)\n` +
+        `- Use the chart's download button inside the rendered HTML to save a permanent copy (PNG / PPT / A4)\n`,
+    });
   }
 
-  content.push({ type: "text", text: JSON.stringify(chartData) });
+  content.push({ type: "text", text: JSON.stringify(enrichedChartData) });
 
-  return { content, structuredContent: chartData };
+  return { content, structuredContent: enrichedChartData };
 }
 
 /**
@@ -254,15 +272,8 @@ async function _buildChartResult(server: McpServer, chartData: any, summary: str
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "MCP Dashboards",
-    version: "2.0.0",
+    version: "2.1.1",
   });
-
-  // After initialize handshake, detect if client supports MCP Apps inline rendering.
-  // Clients that do will see the interactive chart; those that don't get preview URLs.
-  (server.server as any).oninitialized = () => {
-    const caps: any = (server.server as any).getClientCapabilities?.();
-    _clientSupportsInline.set(server, !!getUiCapability(caps));
-  };
 
   // -- Shared HTML resource --
   registerAppResource(
@@ -587,7 +598,7 @@ export function createServer(): McpServer {
     {
       title: "Dashboard",
       description:
-        "Render a full dashboard with KPI cards, charts, and optional hero metric in a responsive grid. Available themes: boardroom (investors, board decks), corporate (enterprise daily use), sales-floor (quota tracking, leaderboards), golden-treasury (wealth, luxury real estate), clinical (healthcare, compliance - WCAG AAA), startup (SaaS metrics, YC demos), ops-control (DevOps, manufacturing), tokyo-midnight (crypto, trading, gaming), zen-garden (wellness, sustainability), consultant (agency deliverables, presentations). Mix-and-match: set palette + typography + effects independently.",
+        "Render a full dashboard with KPI cards, charts, and optional hero metric in a responsive grid. Available themes: boardroom (investors, board decks), corporate (enterprise daily use), sales-floor (quota tracking, leaderboards), golden-treasury (wealth, luxury real estate), clinical (healthcare, compliance - WCAG AAA), startup (SaaS metrics, YC demos), ops-control (DevOps, manufacturing), tokyo-midnight (crypto, trading, gaming), zen-garden (wellness, sustainability), consultant (agency deliverables, presentations), office-red (corporate report-style, Word/PowerPoint aesthetic). Mix-and-match: set palette + typography + effects independently.",
       inputSchema: {
         title: z.string().describe("Dashboard title"),
         kpis: z.array(KpiSchema).optional().describe("KPI cards at the top. Include sparkline[] with 5-20 trend values whenever a metric has a % change - this adds an inline mini chart to the card"),
@@ -762,7 +773,7 @@ export function createServer(): McpServer {
 
       const kpis = [
         { label: "Total Chart Tools", value: 31, suffix: " tools" },
-        { label: "Themes", value: 20, suffix: " presets" },
+        { label: "Themes", value: 21, suffix: " presets" },
       ];
 
       const chartData = {
@@ -791,13 +802,11 @@ export function createServer(): McpServer {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (): Promise<CallToolResult> => {
-      return {
-        content: [
-          { type: "text", text: "Theme Catalog: 20 theme previews with color swatches, typography, and effects. Click any card to use it." },
-          { type: "text", text: JSON.stringify({ type: "theme_catalog" }) },
-        ],
-        structuredContent: { type: "theme_catalog" },
-      };
+      return await _buildChartResult(
+        server,
+        { type: "theme_catalog" },
+        "Theme Catalog: 21 theme previews with color swatches, typography, and effects. Click any card to use it."
+      );
     }
   );
 
@@ -1181,9 +1190,21 @@ export function createServer(): McpServer {
     { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     async (args) => {
       try {
-        const sanitized = path.basename(args.filename);
+        // Sanitize the filename - replace path separators and Windows-reserved chars
+        // with hyphens rather than using path.basename (which would strip the title
+        // down to only the trailing segment when a chart title happens to contain `/`
+        // or `\`, e.g. "Cost / yr" becoming "yr.png").
+        const INVALID = /[\\/:*?"<>|\x00-\x1f]/g;
+        const extMatch = args.filename.match(/\.[A-Za-z0-9]{1,5}$/);
+        const ext = extMatch ? extMatch[0] : "";
+        const base = ext ? args.filename.slice(0, -ext.length) : args.filename;
+        let sanitized = (base.replace(INVALID, "-").trim() || "chart") + ext;
+        // Cap to 200 chars to stay comfortably under the 255 byte NTFS limit.
+        if (sanitized.length > 200) {
+          sanitized = sanitized.slice(0, 200 - ext.length) + ext;
+        }
+
         const downloadsDir = path.join(os.homedir(), "Downloads");
-        // Ensure Downloads folder exists
         await fs.mkdir(downloadsDir, { recursive: true });
         const filePath = path.join(downloadsDir, sanitized);
 
@@ -1199,6 +1220,156 @@ export function createServer(): McpServer {
       } catch (err: any) {
         return {
           content: [{ type: "text", text: `Failed to save: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // -- Tool: list_chart_files (model-visible) --
+  // Lists chart preview HTML files currently on disk in the temp folder.
+  // Returns name, ID, size (KB), and modified timestamp for each. Read-only.
+  server.tool(
+    "list_chart_files",
+    "List all chart preview HTML files saved on disk (in the system temp folder). These are auto-generated each time a chart is rendered and auto-cleaned after 7 days (configurable via MCP_DASHBOARDS_RETAIN_DAYS env var). Returns file metadata (id, name, size, age). Use this to audit disk usage, then call delete_chart_files to remove specific files or all of them.",
+    {},
+    { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    async () => {
+      try {
+        const entries = await fs.readdir(TEMP_DIR).catch(() => [] as string[]);
+        const files: Array<{
+          id: string;
+          name: string;
+          sizeKB: number;
+          modifiedAt: string;
+        }> = [];
+
+        for (const name of entries) {
+          if (!CHART_FILENAME_RE.test(name)) continue;
+          try {
+            const stat = await fs.stat(path.join(TEMP_DIR, name));
+            const id = name.replace(/^chart-/, "").replace(/\.html$/, "");
+            files.push({
+              id,
+              name,
+              sizeKB: Math.round(stat.size / 1024),
+              modifiedAt: new Date(stat.mtimeMs).toISOString(),
+            });
+          } catch { /* skip locked / permission-denied */ }
+        }
+
+        // Sort newest first
+        files.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+
+        const retainDays = Number.parseInt(process.env.MCP_DASHBOARDS_RETAIN_DAYS ?? "7", 10);
+        const summary = files.length === 0
+          ? `No chart files in ${TEMP_DIR}`
+          : `${files.length} chart file(s) in ${TEMP_DIR} (auto-cleanup at ${retainDays} days)`;
+
+        const structured = { dir: TEMP_DIR, retainDays, files };
+        return {
+          content: [
+            { type: "text", text: summary },
+            { type: "text", text: JSON.stringify(structured) },
+          ],
+          structuredContent: structured,
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: `Failed to list chart files: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  // -- Tool: delete_chart_files (destructive) --
+  // Manually deletes chart preview HTML files. User-initiated only (the AI calls
+  // this when the user explicitly asks). Scope is hard-locked to the temp subfolder
+  // and the chart-{hex}.html pattern - it cannot delete anything else.
+  server.tool(
+    "delete_chart_files",
+    "Delete chart preview HTML files saved on disk (in the system temp folder). REQUIRES the user's explicit instruction to run - it deletes files from disk and cannot be undone. Provide at least one of: chartIds (specific file IDs to delete), olderThanDays (bulk delete by age), or all=true (delete every chart file). Scope is hard-locked to mcp-dashboards temp folder; cannot touch anything else. Returns lists of successfully deleted files and per-file failures (e.g. files currently locked by an open browser).",
+    {
+      chartIds: z.array(z.string()).optional().describe("Specific chart IDs to delete (12-char hex strings). Each must match /^[a-f0-9]{12}$/ or it is rejected."),
+      olderThanDays: z.number().int().positive().optional().describe("Delete chart files older than N days (positive integer)."),
+      all: z.boolean().optional().describe("Explicit confirmation to delete ALL chart files in the temp folder. Defaults to false."),
+    },
+    { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    async (args) => {
+      const { chartIds, olderThanDays, all } = args;
+
+      if (!chartIds?.length && olderThanDays === undefined && !all) {
+        return {
+          content: [{
+            type: "text",
+            text: "delete_chart_files requires at least one of: chartIds, olderThanDays, or all=true. Refusing to act on empty input.",
+          }],
+          isError: true,
+        };
+      }
+
+      const deleted: Array<{ id: string; name: string }> = [];
+      const failed: Array<{ id: string; name: string; reason: string }> = [];
+
+      try {
+        const entries = await fs.readdir(TEMP_DIR).catch(() => [] as string[]);
+        const now = Date.now();
+        const ageCutoff = olderThanDays !== undefined
+          ? now - olderThanDays * 24 * 60 * 60 * 1000
+          : null;
+        const idSet = chartIds?.length ? new Set(chartIds.filter((id) => /^[a-f0-9]{12}$/.test(id))) : null;
+
+        for (const name of entries) {
+          if (!CHART_FILENAME_RE.test(name)) continue;
+          const id = name.replace(/^chart-/, "").replace(/\.html$/, "");
+
+          // Decide whether this file qualifies for deletion
+          let qualifies = false;
+          if (all) qualifies = true;
+          if (!qualifies && idSet?.has(id)) qualifies = true;
+          if (!qualifies && ageCutoff !== null) {
+            try {
+              const stat = await fs.stat(path.join(TEMP_DIR, name));
+              if (stat.mtimeMs < ageCutoff) qualifies = true;
+            } catch { /* fall through, treat as not qualifying */ }
+          }
+          if (!qualifies) continue;
+
+          // Verify the resolved path stays inside TEMP_DIR (defense in depth)
+          const full = path.join(TEMP_DIR, name);
+          if (path.dirname(full) !== TEMP_DIR) {
+            failed.push({ id, name, reason: "path escapes temp dir" });
+            continue;
+          }
+
+          try {
+            await fs.unlink(full);
+            // Also evict from in-memory chart store so the localhost URL stops
+            // resolving. Without this, the URL keeps serving the cached chart
+            // even though the file is gone - confusing for users who deleted
+            // the chart and expect the link to be dead.
+            evictChartFromCache(id);
+            deleted.push({ id, name });
+          } catch (err: any) {
+            failed.push({ id, name, reason: err.code || err.message || "unknown error" });
+          }
+        }
+
+        const parts: string[] = [`Deleted ${deleted.length} chart file(s) from ${TEMP_DIR}`];
+        if (failed.length) parts.push(`${failed.length} failed (locked or permission issues)`);
+
+        const structured = { dir: TEMP_DIR, deleted, failed };
+        return {
+          content: [
+            { type: "text", text: parts.join("; ") },
+            { type: "text", text: JSON.stringify(structured) },
+          ],
+          structuredContent: structured,
+        };
+      } catch (err: any) {
+        return {
+          content: [{ type: "text", text: `Failed to delete chart files: ${err.message}` }],
           isError: true,
         };
       }

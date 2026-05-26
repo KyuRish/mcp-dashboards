@@ -6,12 +6,12 @@
     "url": "https://github.com/KyuRish/mcp-dashboards",
     "source": "github"
   },
-  "version": "2.1.0",
+  "version": "2.1.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "mcp-dashboards",
-      "version": "2.1.0",
+      "version": "2.1.1",
       "transport": {
         "type": "stdio"
       },
