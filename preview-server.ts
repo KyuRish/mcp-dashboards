@@ -28,6 +28,8 @@ async function loadHtml(): Promise<string> {
 }
 
 function injectChartData(html: string, data: any): string {
+  // Escape </ in the JSON payload so chart data containing the literal string
+  // "</script>" cannot prematurely terminate the inline <script> block below.
   const payload = JSON.stringify(data).replace(/<\//g, "<\\/");
   return html.replace(
     "</head>",
@@ -46,7 +48,7 @@ function getRetainDays(): number {
 function storeChart(data: any): string {
   const id = crypto.randomBytes(6).toString("hex");
   chartStore.set(id, data);
-  // Evict oldest from in-memory store if over limit (does NOT touch disk files)
+  // In-memory eviction only - does not touch on-disk chart files.
   if (chartStore.size > MAX_CHARTS_IN_MEMORY) {
     const firstKey = chartStore.keys().next().value;
     if (firstKey) chartStore.delete(firstKey);

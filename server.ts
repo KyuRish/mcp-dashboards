@@ -294,7 +294,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_pie_chart --
   registerAppTool(
     server,
     "render_pie_chart",
@@ -342,7 +341,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_bar_chart --
   registerAppTool(
     server,
     "render_bar_chart",
@@ -392,7 +390,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_line_chart --
   registerAppTool(
     server,
     "render_line_chart",
@@ -442,7 +439,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_hero_metric --
   const GemTypeEnum = z.enum([
     "diamond", "ruby", "sapphire", "emerald",
     "golden_pearl", "white_pearl", "black_pearl", "crystal",
@@ -564,7 +560,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_dashboard --
   const HeroSchema = z.object({
     variant: HeroVariantEnum.optional().describe("Hero variant (default: progress_ring for dashboard)"),
     value: z.union([z.string(), z.number()]).optional().describe("Hero metric value"),
@@ -676,7 +671,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_chart_catalog --
   registerAppTool(
     server,
     "render_chart_catalog",
@@ -788,11 +782,10 @@ export function createServer(): McpServer {
         footer: { text: "mcp-dashboards", lastUpdated: "Also available: render_table, render_from_json, render_from_url, render_live_chart, poll_http" },
       };
 
-      return await _buildChartResult(server, chartData, "Chart Catalog: 22 visual previews of every embeddable chart type. Click any card to ask about it. Standalone-only tools (table, live, auto, URL) listed in footer.");
+      return await _buildChartResult(server, chartData, `Chart Catalog: ${charts.length} visual previews of every embeddable chart type. Click any card to ask about it. Standalone-only tools (table, live, auto, URL) listed in footer.`);
     }
   );
 
-  // -- Tool: render_theme_catalog --
   registerAppTool(
     server,
     "render_theme_catalog",
@@ -812,7 +805,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_radar_chart --
   _registerChartTool(server, "render_radar_chart", {
     title: "Radar Chart",
     description: "Render a radar (spider/web) chart - 'How do items compare across multiple dimensions?' Great for skill profiles, product comparisons, competitive analysis.",
@@ -838,7 +830,6 @@ export function createServer(): McpServer {
     return `${args.title}: ${ds.map((d: any) => d.label).join(", ")} across ${(args.labels as string[]).length} dimensions`;
   });
 
-  // -- Tool: render_treemap_chart --
   _registerChartTool(server, "render_treemap_chart", {
     title: "Treemap",
     description: "Render a treemap - 'What takes up the most space?' Nested rectangles sized by value. Supports optional grouping for hierarchical data (e.g. region > country). Great for budget breakdowns, disk usage, portfolio allocation.",
@@ -863,7 +854,6 @@ export function createServer(): McpServer {
     return `${args.title}: ${items.length} items, largest: ${items.sort((a: any, b: any) => b.value - a.value)[0]?.label}`;
   });
 
-  // -- Tool: render_sankey_chart --
   _registerChartTool(server, "render_sankey_chart", {
     title: "Sankey Diagram",
     description: "Render a sankey flow diagram - 'Where does it go?' Shows flows between nodes with width proportional to value. Great for budget flows, user journeys, energy transfers, conversion funnels with multiple paths.",
@@ -889,7 +879,6 @@ export function createServer(): McpServer {
     return `${args.title}: ${flows.length} flows across ${nodes.length} nodes`;
   });
 
-  // -- Tool: render_wordcloud_chart --
   _registerChartTool(server, "render_wordcloud_chart", {
     title: "Word Cloud",
     description: "Render a word cloud - 'What are the dominant themes?' Words sized by frequency or importance. Great for survey responses, keyword analysis, topic frequency.",
@@ -913,7 +902,6 @@ export function createServer(): McpServer {
     return `${args.title}: ${words.length} words, top: ${top.join(", ")}`;
   });
 
-  // -- Tool: render_boxplot_chart --
   _registerChartTool(server, "render_boxplot_chart", {
     title: "Boxplot / Violin",
     description: "Render a boxplot or violin chart - 'What is the distribution?' Shows median, quartiles, whiskers, and outliers. Pass raw number arrays per category - stats computed automatically. Use style='violin' for density shape.",
@@ -940,7 +928,6 @@ export function createServer(): McpServer {
     return `${args.title}: ${ds.map((d: any) => d.label).join(", ")} across ${(args.labels as string[]).length} categories`;
   });
 
-  // -- Tool: render_live_chart --
   _registerChartTool(server, "render_live_chart", {
     title: "Live Chart",
     description: "Render a real-time auto-updating line chart that polls a tool at a regular interval. Use when the user wants to MONITOR a live data source. Set pollTool to 'poll_http' with pollArgs containing a preset or URL to poll external APIs (including other MCP servers' data). The chart auto-refreshes - no user action needed.",
@@ -975,7 +962,6 @@ export function createServer(): McpServer {
     return `Live chart "${args.title}" - polling ${args.pollTool} every ${args.interval ?? 2}s: ${series}`;
   });
 
-  // -- Tool: render_scatter_chart --
   registerAppTool(
     server,
     "render_scatter_chart",
@@ -1014,7 +1000,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_candlestick_chart --
   registerAppTool(
     server,
     "render_candlestick_chart",
@@ -1053,7 +1038,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_table --
   registerAppTool(
     server,
     "render_table",
@@ -1096,7 +1080,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_from_json --
   registerAppTool(
     server,
     "render_from_json",
@@ -1128,7 +1111,6 @@ export function createServer(): McpServer {
     }
   );
 
-  // -- Tool: render_from_url --
   registerAppTool(
     server,
     "render_from_url",
@@ -1429,8 +1411,6 @@ export function createServer(): McpServer {
       }
     }
   );
-
-  // -- New chart tools (Phase 2) --
 
   _registerChartTool(server, "render_bullet_chart", {
     title: "Bullet Chart",

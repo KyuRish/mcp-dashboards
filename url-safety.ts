@@ -19,10 +19,10 @@ import ipaddr from "ipaddr.js";
  * hostnames). Allowlist still resolves DNS but skips the range check, for
  * users who legitimately need to poll an internal endpoint by hostname.
  *
- * NOT addressed by this layer: DNS rebinding (host resolves to public IP at
- * check time, then to private IP at fetch time). The race window is small
- * but real. A full mitigation needs a custom http.Agent that pins the
- * resolved IP. Deferred to keep this fix minimal; document the residual risk.
+ * Residual risk: DNS rebinding. The host can resolve to a public IP during
+ * this check and to a private IP during fetch(). Mitigating this requires
+ * pinning the resolved IP via a custom http.Agent with a fixed lookup
+ * function. Not done here.
  */
 
 export class UrlSafetyError extends Error {
@@ -131,11 +131,32 @@ const _OUTBOUND_RATE = Math.max(1, Number(process.env.MCP_OUTBOUND_RATE_PER_SEC)
 const _OUTBOUND_BURST = Math.max(1, Number(process.env.MCP_OUTBOUND_BURST) || 20);
 const _OUTBOUND_MAX_WAIT_MS = 5000;
 const _OUTBOUND_INTERVAL_MS = 1000 / _OUTBOUND_RATE;
+// Cap the per-host bucket map to prevent unbounded growth if a prompt-injected
+// AI loops over render_from_url against thousands of unique hostnames. Entries
+// older than now (their slot has elapsed) get evicted first.
+const _NEXT_SLOT_MAX = 10000;
 const _nextSlot = new Map<string, number>();
+
+function _pruneNextSlot(now: number): void {
+  if (_nextSlot.size <= _NEXT_SLOT_MAX) return;
+  // Drop entries whose reserved slot is already in the past. They're inactive
+  // - a fresh acquire on that host would just compute earliestPossible anyway.
+  for (const [k, slot] of _nextSlot) {
+    if (slot < now) _nextSlot.delete(k);
+    if (_nextSlot.size <= _NEXT_SLOT_MAX / 2) break;
+  }
+  // If we're still over (everything is active), drop oldest insertion order.
+  while (_nextSlot.size > _NEXT_SLOT_MAX) {
+    const firstKey = _nextSlot.keys().next().value;
+    if (firstKey === undefined) break;
+    _nextSlot.delete(firstKey);
+  }
+}
 
 export async function acquireOutbound(hostname: string): Promise<void> {
   const key = hostname.toLowerCase();
   const now = Date.now();
+  _pruneNextSlot(now);
   const prev = _nextSlot.get(key) ?? 0;
   // Burst allowance: a host that hasn't been called in a while can fire
   // BURST requests immediately. earliestPossible is set so the first call

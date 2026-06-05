@@ -83,8 +83,14 @@ async function startStreamableHTTPServer(
     }
   });
 
-  const httpServer = app.listen(port, () => {
-    console.log(`MCP Dashboards server listening on http://localhost:${port}/mcp`);
+  // Default-bind to 127.0.0.1 so LAN attackers can't reach port 3001 directly
+  // and bypass the CORS allowlist (cors only triggers when an Origin header is
+  // sent; a raw curl from another machine has no Origin and would otherwise
+  // be waved through). Override with MCP_HTTP_BIND_HOST=0.0.0.0 (or any
+  // interface) for trusted deployment scenarios.
+  const bindHost = process.env.MCP_HTTP_BIND_HOST || "127.0.0.1";
+  const httpServer = app.listen(port, bindHost, () => {
+    console.log(`MCP Dashboards server listening on http://${bindHost}:${port}/mcp`);
   });
 
   const shutdown = () => {

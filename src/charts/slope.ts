@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors } from "./shared.js";
+import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors, sanitizeColor } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
 interface SlopeItem {
@@ -47,7 +47,10 @@ export function renderSlopeChart(container: HTMLElement, payload: SlopeData): vo
   }
 
   const groups = payload.data.map((item, i) => {
-    const color = item.color || colors[i % colors.length];
+    // sanitizeColor before SVG attribute interpolation - the SVG is mounted
+    // via innerHTML and attacker-controlled color could break out of the
+    // stroke="" / fill="" attribute.
+    const color = sanitizeColor(item.color || colors[i % colors.length]);
     const y1 = yPos(item.start);
     const y2 = yPos(item.end);
     return `

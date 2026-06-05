@@ -100,9 +100,14 @@ function buildRingSVG(
   const glowId = "ring-glow-" + id;
   const pulseGlowId = "pulse-glow-" + id;
 
-  const gradStart = color || "var(--gradient-start, var(--accent))";
-  const gradEnd = color || "var(--gradient-end, var(--accent))";
-  const glowColor = color || "var(--glow-color, rgba(59,130,246,0.3))";
+  // Sanitize color before SVG attribute interpolation - attacker-controlled
+  // strings could otherwise break out of stop-color="" and flood-color=""
+  // into a sibling <script> or onload attribute (HTML5 foreign-content rules
+  // apply once the SVG is mounted via innerHTML).
+  const safeColor = sanitizeColor(color, "");
+  const gradStart = safeColor || "var(--gradient-start, var(--accent))";
+  const gradEnd = safeColor || "var(--gradient-end, var(--accent))";
+  const glowColor = safeColor || "var(--glow-color, rgba(59,130,246,0.3))";
 
   const pulseR = s.r + s.stroke / 2;
 
@@ -153,9 +158,11 @@ function buildGaugeSVG(
   const id = uid();
   const gradId = "gauge-grad-" + id;
   const glowId = "gauge-glow-" + id;
-  const gradStart = color || "var(--gradient-start, var(--accent))";
-  const gradEnd = color || "var(--gradient-end, var(--accent))";
-  const glowColor = color || "var(--glow-color, rgba(59,130,246,0.3))";
+  // See sanitizeColor rationale in buildRingSVG above.
+  const safeColor = sanitizeColor(color, "");
+  const gradStart = safeColor || "var(--gradient-start, var(--accent))";
+  const gradEnd = safeColor || "var(--gradient-end, var(--accent))";
+  const glowColor = safeColor || "var(--glow-color, rgba(59,130,246,0.3))";
 
   return `<svg viewBox="0 0 ${s.box} ${s.box * 0.65}" width="${s.box}" height="${s.box * 0.65}">
     <defs>

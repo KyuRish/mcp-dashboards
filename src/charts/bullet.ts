@@ -120,7 +120,7 @@ export function renderBulletChart(container: HTMLElement, payload: BulletData): 
           <div class="bullet__bar" style="width:${actualPct}%"></div>
           <div class="bullet__target" style="left:${targetPct}%"></div>
         </div>
-        <div class="bullet__val">${item.actual}${item.unit ? " " + item.unit : ""}</div>
+        <div class="bullet__val">${item.actual}${item.unit ? " " + escapeHtml(item.unit) : ""}</div>
       </div>
     `;
   }).join("");

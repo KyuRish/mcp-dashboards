@@ -27,7 +27,10 @@ export function renderVarianceChart(container: HTMLElement, payload: VarianceDat
   if (theme) applyTheme(container, theme);
 
   const shimmer = theme?.effects.shimmerTitle ? " shimmer-text" : "";
-  const unit = payload.unit || "";
+  // Escape unit - lands in innerHTML below via diffLabel. The plain payload.unit
+  // is still used in sendClickMessage further down (the chat host re-escapes).
+  const rawUnit = payload.unit || "";
+  const unit = escapeHtml(rawUnit);
   const maxVal = Math.max(...payload.data.flatMap((d) => [d.budget, d.actual]), 1);
 
   const rows = payload.data.map((item, i) => {
@@ -68,7 +71,7 @@ export function renderVarianceChart(container: HTMLElement, payload: VarianceDat
       const idx = parseInt(el.dataset.idx ?? "0", 10);
       const item = payload.data[idx];
       const diff = item.actual - item.budget;
-      sendClickMessage(`[Variance] "${payload.title}" - ${item.label}: actual ${item.actual}${unit} vs budget ${item.budget}${unit} (${diff > 0 ? "+" : ""}${diff}${unit})`);
+      sendClickMessage(`[Variance] "${payload.title}" - ${item.label}: actual ${item.actual}${rawUnit} vs budget ${item.budget}${rawUnit} (${diff > 0 ? "+" : ""}${diff}${rawUnit})`);
     });
   });
 

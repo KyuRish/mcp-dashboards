@@ -65,9 +65,14 @@ export function renderDumbbellChart(container: HTMLElement, payload: DumbbellDat
   const min = Math.min(...allVals);
   const max = Math.max(...allVals);
   const range = max - min || 1;
-  const beforeLabel = payload.beforeLabel || "Before";
-  const afterLabel = payload.afterLabel || "After";
-  const unit = payload.unit || "";
+  // Keep raw* for sendClickMessage (chat host re-escapes); use escaped versions
+  // for everything else that lands in innerHTML (title="" attributes + bodies).
+  const rawBeforeLabel = payload.beforeLabel || "Before";
+  const rawAfterLabel = payload.afterLabel || "After";
+  const rawUnit = payload.unit || "";
+  const beforeLabel = escapeHtml(rawBeforeLabel);
+  const afterLabel = escapeHtml(rawAfterLabel);
+  const unit = escapeHtml(rawUnit);
 
   // Map a value to percentage position (10% - 90% range)
   const toPct = (v: number) => ((v - min) / range) * 80 + 10;
@@ -140,8 +145,8 @@ export function renderDumbbellChart(container: HTMLElement, payload: DumbbellDat
       <div class="chart-card__body chart-card__body--css">
         <div class="dumbbell">
           <div class="dumbbell__legend">
-            <span class="dumbbell__legend-item"><span class="dumbbell__dot-sm dumbbell__dot--before"></span>${escapeHtml(beforeLabel)}</span>
-            <span class="dumbbell__legend-item"><span class="dumbbell__dot-sm dumbbell__dot--after"></span>${escapeHtml(afterLabel)}</span>
+            <span class="dumbbell__legend-item"><span class="dumbbell__dot-sm dumbbell__dot--before"></span>${beforeLabel}</span>
+            <span class="dumbbell__legend-item"><span class="dumbbell__dot-sm dumbbell__dot--after"></span>${afterLabel}</span>
           </div>
           ${rows}
           ${scaleHtml}
@@ -155,7 +160,7 @@ export function renderDumbbellChart(container: HTMLElement, payload: DumbbellDat
     el.addEventListener("click", () => {
       const idx = parseInt(el.dataset.idx ?? "0", 10);
       const item = payload.data[idx];
-      sendClickMessage(`[Dumbbell] "${payload.title}" - ${item.label}: ${item.before}${unit} -> ${item.after}${unit}`);
+      sendClickMessage(`[Dumbbell] "${payload.title}" - ${item.label}: ${item.before}${rawUnit} -> ${item.after}${rawUnit}`);
     });
   });
 

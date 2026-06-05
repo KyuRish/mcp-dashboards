@@ -27,7 +27,8 @@ export function renderWaterfallChart(container: HTMLElement, payload: WaterfallD
   if (theme) applyTheme(container, theme);
 
   const shimmer = theme?.effects.shimmerTitle ? " shimmer-text" : "";
-  const unit = payload.unit || "";
+  // Escape once - lands in both a title="" attribute and a span body below.
+  const unit = escapeHtml(payload.unit || "");
 
   // Auto-infer types if not provided
   const items = payload.data.map((d, i, arr) => {

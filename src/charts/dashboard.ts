@@ -127,6 +127,7 @@ function _parseColor(c: string): [number, number, number] {
   if (rgb) return [Math.round(+rgb[1]), Math.round(+rgb[2]), Math.round(+rgb[3])];
   const srgb = c.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
   if (srgb) return [Math.round(+srgb[1]*255), Math.round(+srgb[2]*255), Math.round(+srgb[3]*255)];
+  // Fallback to default accent #6366f1 (indigo) when color string is unparseable.
   return [99, 102, 241];
 }
 
@@ -210,7 +211,6 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
             </div>
           `;
         }
-        // CSS/SVG chart types - render into a div container
         return `<div id="dash-css-chart-${i}" style="${style}"></div>`;
       }
     )
