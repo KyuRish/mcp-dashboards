@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart } from "./shared.js";
+import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, sanitizeColor } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
 interface BulletItem {
@@ -87,7 +87,7 @@ export function renderBulletChart(container: HTMLElement, payload: BulletData): 
         const color = colors[z % colors.length];
         const label = labels[z] || "";
         const opacity = 0.18 - (z * 0.015); // slight fade from first to last
-        zonesHtml += `<div class="bullet__zone" style="left:${prevPct}%;width:${widthPct}%;background:${color};opacity:${Math.max(opacity, 0.06)}">`;
+        zonesHtml += `<div class="bullet__zone" style="left:${prevPct}%;width:${widthPct}%;background:${sanitizeColor(color)};opacity:${Math.max(opacity, 0.06)}">`;
         if (label && widthPct > 8) {
           zonesHtml += `<span class="bullet__zone-label">${escapeHtml(label)}</span>`;
         }
@@ -148,7 +148,7 @@ export function renderBulletChart(container: HTMLElement, payload: BulletData): 
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("bullet", "render_bullet_chart", renderBulletChart);

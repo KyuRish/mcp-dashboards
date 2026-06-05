@@ -199,7 +199,7 @@ export function renderGeoChart(container: HTMLElement, payload: GeoData): void {
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 
   // Zoom/pan for geo maps
   const body = container.querySelector<HTMLElement>(".chart-card__body");
@@ -324,7 +324,7 @@ export function renderBubbleMap(container: HTMLElement, payload: BubbleMapData):
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 
   const body = container.querySelector<HTMLElement>(".chart-card__body");
   if (body) {

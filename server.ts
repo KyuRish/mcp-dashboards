@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { getPreviewUrls, evictChartFromCache, TEMP_DIR, CHART_FILENAME_RE } from "./preview-server.js";
+import { assertSafeUrl, acquireOutbound, UrlSafetyError } from "./url-safety.js";
 
 // Works both from source (server.ts) and compiled (dist/server.js)
 const __filename = fileURLToPath(import.meta.url);
@@ -213,23 +214,24 @@ function _registerChartTool(
 
 // Builds the standard tool response. Writes a self-contained HTML file for the
 // chart AND lazy-starts a same-machine HTTP server (127.0.0.1, random port) so
-// non-MCP-Apps clients can view the chart in their browser. Inline-rendering
-// clients (Claude Desktop, VS Code Insiders) just use structuredContent and
-// ignore the extra link. Opt out entirely with MCP_DASHBOARDS_DISABLE_PREVIEW=1.
+// the chart can be opened, saved, and shared from a browser regardless of
+// which client is in use:
 //
-// Why both URLs:
-//   http://localhost:PORT/chart/{id} - the clickable link. Claude Code's react-
-//     markdown strips file://, vscode://, command:// schemes, so http:// is
-//     the only URL scheme that produces a working clickable link in chat.
-//   file:///.../chart-{id}.html - the persistent/shareable artifact. Same HTML
-//     bytes, written to disk so users can email, archive, or open after the
-//     server has shut down.
+//   - Apps-aware clients (Claude Code, Claude Desktop, VS Code Insiders):
+//     chart renders inline from structuredContent + _meta.ui.resourceUri.
+//     The localhost URL is still useful for "open in browser to print", save
+//     a permanent copy, or share with a colleague.
 //
-// The summary text carries a ready-to-paste markdown link with an explicit
-// instruction for the AI to surface it in the reply. Claude Code's bug #15412
-// hides the raw content array when structuredContent is present, so embedding
-// the link in the summary (which the AI then echoes into chat) is the only
-// reliable way to make a URL clickable for the user.
+//   - Non-Apps clients (generic LLM IDE plugins, older clients): the URL is
+//     the only way to view the chart at all.
+//
+// Why we always emit URLs (no capability detection): Claude Code v2.1.x does
+// not advertise capabilities.extensions["io.modelcontextprotocol/ui"], so any
+// capability-based detection silently treats it as non-Apps and is therefore
+// dead code. The shareable HTML link is genuinely useful even when the chart
+// renders inline.
+//
+// Opt out entirely with MCP_DASHBOARDS_DISABLE_PREVIEW=1.
 async function _buildChartResult(_server: McpServer, chartData: any, summary: string): Promise<CallToolResult> {
   const urls = await getPreviewUrls(chartData);
 
@@ -272,7 +274,7 @@ async function _buildChartResult(_server: McpServer, chartData: any, summary: st
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "MCP Dashboards",
-    version: "2.1.1",
+    version: "2.2.0",
   });
 
   // -- Shared HTML resource --
@@ -1148,7 +1150,12 @@ export function createServer(): McpServer {
     },
     async (args): Promise<CallToolResult> => {
       try {
-        const response = await fetch(args.url, {
+        // SSRF protection: reject private/loopback/link-local destinations
+        // unless the hostname is in MCP_URL_ALLOWLIST.
+        const safeUrl = await assertSafeUrl(args.url);
+        // Throttle outbound calls per hostname.
+        await acquireOutbound(safeUrl.hostname);
+        const response = await fetch(safeUrl, {
           headers: { "Accept": "application/json", "User-Agent": "MCP-Dashboard/1.0" },
           signal: AbortSignal.timeout(15000),
         });
@@ -1169,26 +1176,50 @@ export function createServer(): McpServer {
 
         return await _buildChartResult(server, chartData, `Fetched and visualizing: ${args.title} (from ${args.url})`);
       } catch (err: any) {
+        const msg = err instanceof UrlSafetyError
+          ? err.message
+          : `Error fetching ${args.url}: ${err.message}`;
         return {
-          content: [{ type: "text", text: `Error fetching ${args.url}: ${err.message}` }],
+          content: [{ type: "text", text: msg }],
           isError: true,
         };
       }
     }
   );
 
-  // -- Tool: save_file (app-only, invisible to AI model) --
-  // Used by the UI to save exports since iframe sandbox blocks direct downloads.
-  server.tool(
+  // -- Tool: save_file --
+  // Two-layer defense:
+  //   1. _meta.ui.visibility=["app"] tells compliant MCP clients (Claude Code,
+  //      Claude Desktop, etc.) to NOT surface this tool to the LLM. Only the
+  //      View bundle running inside the chart iframe can invoke it via
+  //      app.callServerTool() over the MCP Apps PostMessage transport.
+  //   2. Extension allowlist (.png, .csv) is the server-side enforcement that
+  //      runs regardless of client compliance, so even a buggy/malicious
+  //      client cannot make us write arbitrary file types to ~/Downloads.
+  //
+  // The View only ever emits PNG (chart screenshots) and CSV (table data) -
+  // see addPngExportButton / addCsvExportButton in src/charts/shared.ts.
+  const SAVE_FILE_ALLOWED_EXTS = new Set([".png", ".csv"]);
+  registerAppTool(
+    server,
     "save_file",
-    "Save a file to the user's Downloads folder. Used internally by the dashboard UI for PNG/CSV export.",
     {
-      filename: z.string().describe("Filename with extension (e.g. chart.png)"),
-      data: z.string().describe("File contents: base64-encoded binary or plain text"),
-      encoding: z.enum(["base64", "utf-8"]).describe("How data is encoded"),
+      title: "Save File",
+      description: "Save a chart export (PNG or CSV) to the user's Downloads folder. App-only - invoked by the chart View's Download buttons, not by the AI.",
+      inputSchema: {
+        filename: z.string().describe("Filename with extension (.png or .csv only)"),
+        data: z.string().describe("File contents: base64-encoded binary or plain text"),
+        encoding: z.enum(["base64", "utf-8"]).describe("How data is encoded"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: RESOURCE_URI,
+          visibility: ["app"],
+        },
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
-    { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-    async (args) => {
+    async (args: { filename: string; data: string; encoding: "base64" | "utf-8" }): Promise<CallToolResult> => {
       try {
         // Sanitize the filename - replace path separators and Windows-reserved chars
         // with hyphens rather than using path.basename (which would strip the title
@@ -1196,7 +1227,20 @@ export function createServer(): McpServer {
         // or `\`, e.g. "Cost / yr" becoming "yr.png").
         const INVALID = /[\\/:*?"<>|\x00-\x1f]/g;
         const extMatch = args.filename.match(/\.[A-Za-z0-9]{1,5}$/);
-        const ext = extMatch ? extMatch[0] : "";
+        const ext = (extMatch ? extMatch[0] : "").toLowerCase();
+
+        // Server-side extension allowlist - defense even if a non-compliant
+        // client surfaces this tool to the LLM despite the visibility hint.
+        if (!SAVE_FILE_ALLOWED_EXTS.has(ext)) {
+          return {
+            content: [{
+              type: "text",
+              text: `Refusing to save: extension "${ext || "(none)"}" not in allowlist. Allowed: ${[...SAVE_FILE_ALLOWED_EXTS].join(", ")}`,
+            }],
+            isError: true,
+          };
+        }
+
         const base = ext ? args.filename.slice(0, -ext.length) : args.filename;
         let sanitized = (base.replace(INVALID, "-").trim() || "chart") + ext;
         // Cap to 200 chars to stay comfortably under the 255 byte NTFS limit.
@@ -1208,14 +1252,24 @@ export function createServer(): McpServer {
         await fs.mkdir(downloadsDir, { recursive: true });
         const filePath = path.join(downloadsDir, sanitized);
 
+        // Defense in depth: confirm the resolved path stays inside Downloads.
+        const resolved = path.resolve(filePath);
+        const downloadsResolved = path.resolve(downloadsDir);
+        if (path.dirname(resolved) !== downloadsResolved) {
+          return {
+            content: [{ type: "text", text: "Refusing to save: path escapes Downloads directory" }],
+            isError: true,
+          };
+        }
+
         if (args.encoding === "base64") {
-          await fs.writeFile(filePath, Buffer.from(args.data, "base64"));
+          await fs.writeFile(resolved, Buffer.from(args.data, "base64"));
         } else {
-          await fs.writeFile(filePath, args.data, "utf-8");
+          await fs.writeFile(resolved, args.data, "utf-8");
         }
 
         return {
-          content: [{ type: "text", text: `Saved to ${filePath}` }],
+          content: [{ type: "text", text: `Saved to ${resolved}` }],
         };
       } catch (err: any) {
         return {
@@ -1779,7 +1833,20 @@ export function createServer(): McpServer {
           fetchHeaders = { ...args.headers, ...fetchHeaders };
         }
 
-        const resp = await fetch(fetchUrl, {
+        // SSRF protection: validate target before fetch. Presets are trusted
+        // (operator-configured at env-var level), so they skip the check; raw
+        // URLs from the AI go through the full guard.
+        let safeUrl: URL;
+        if (args.preset) {
+          safeUrl = new URL(fetchUrl);
+        } else {
+          safeUrl = await assertSafeUrl(fetchUrl);
+        }
+
+        // Throttle outbound calls per hostname (covers both presets and raw).
+        await acquireOutbound(safeUrl.hostname);
+
+        const resp = await fetch(safeUrl, {
           method: args.method ?? "GET",
           headers: fetchHeaders,
           body: args.method === "POST" ? args.body : undefined,
@@ -1795,8 +1862,11 @@ export function createServer(): McpServer {
         const text = await resp.text();
         return { content: [{ type: "text", text }] };
       } catch (err: any) {
+        const msg = err instanceof UrlSafetyError
+          ? err.message
+          : `poll_http failed: ${err.message}`;
         return {
-          content: [{ type: "text", text: `poll_http failed: ${err.message}` }],
+          content: [{ type: "text", text: msg }],
           isError: true,
         };
       }

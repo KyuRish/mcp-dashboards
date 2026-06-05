@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors } from "./shared.js";
+import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors, sanitizeColor } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
 interface FunnelItem {
@@ -39,7 +39,7 @@ export function renderFunnelChart(container: HTMLElement, payload: FunnelData): 
 
     return `
       ${showConversion && convPct ? `<div class="funnel__conv">${convPct}%</div>` : ""}
-      <div class="funnel__stage" data-idx="${i}" style="--funnel-width:${widthPct}%;--funnel-color:${color}">
+      <div class="funnel__stage" data-idx="${i}" style="--funnel-width:${widthPct}%;--funnel-color:${sanitizeColor(color)}">
         <div class="funnel__bar"></div>
         <div class="funnel__info">
           <span class="funnel__name">${escapeHtml(item.label)}</span>
@@ -73,7 +73,7 @@ export function renderFunnelChart(container: HTMLElement, payload: FunnelData): 
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("funnel", "render_funnel_chart", renderFunnelChart);

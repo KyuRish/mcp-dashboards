@@ -121,7 +121,7 @@ export function renderBoxplotChart(container: HTMLElement, payload: BoxplotData)
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("boxplot", "render_boxplot_chart", renderBoxplotChart);

@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart } from "./shared.js";
+import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, sanitizeColor } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
 interface DumbbellItem {
@@ -88,7 +88,7 @@ export function renderDumbbellChart(container: HTMLElement, payload: DumbbellDat
       const color = colors[z % colors.length];
       const label = labels[z] || "";
       const opacity = 0.12 - (z * 0.01);
-      zonesBgHtml += `<div class="dumbbell__zone" style="left:${prevPct}%;width:${widthPct}%;background:${color};opacity:${Math.max(opacity, 0.04)}">`;
+      zonesBgHtml += `<div class="dumbbell__zone" style="left:${prevPct}%;width:${widthPct}%;background:${sanitizeColor(color)};opacity:${Math.max(opacity, 0.04)}">`;
       if (label && widthPct > 6) {
         zonesBgHtml += `<span class="dumbbell__zone-label">${escapeHtml(label)}</span>`;
       }
@@ -161,7 +161,7 @@ export function renderDumbbellChart(container: HTMLElement, payload: DumbbellDat
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("dumbbell", "render_dumbbell_chart", renderDumbbellChart);

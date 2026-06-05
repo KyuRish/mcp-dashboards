@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors } from "./shared.js";
+import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors, sanitizeColor } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
 interface LollipopItem {
@@ -48,8 +48,8 @@ export function renderLollipopChart(container: HTMLElement, payload: LollipopDat
       <div class="lollipop__row" data-idx="${i}"${tooltipAttr}>
         <div class="lollipop__label">${escapeHtml(item.label)}</div>
         <div class="lollipop__track">
-          <div class="lollipop__line" style="width:${pct}%;background:${color}"></div>
-          <div class="lollipop__dot" style="left:${pct}%;background:${color}"></div>
+          <div class="lollipop__line" style="width:${pct}%;background:${sanitizeColor(color)}"></div>
+          <div class="lollipop__dot" style="left:${pct}%;background:${sanitizeColor(color)}"></div>
           ${targetHtml}
         </div>
         <div class="lollipop__val">${item.value.toLocaleString()}</div>
@@ -86,7 +86,7 @@ export function renderLollipopChart(container: HTMLElement, payload: LollipopDat
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("lollipop", "render_lollipop_chart", renderLollipopChart);

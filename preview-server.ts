@@ -128,8 +128,15 @@ async function ensurePreviewServer(): Promise<number> {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(injected);
       } catch (err) {
+        // Log full error server-side for debugging, return generic message to the
+        // client. Even though we bind to 127.0.0.1, err.message can leak absolute
+        // filesystem paths and other internal details to anything that can reach
+        // the loopback (e.g. browser JS in the same machine).
+        process.stderr.write(
+          `[mcp-dashboards] preview-server error: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`,
+        );
         res.writeHead(500);
-        res.end(`Server error: ${err instanceof Error ? err.message : String(err)}`);
+        res.end("Internal server error");
       }
     });
 

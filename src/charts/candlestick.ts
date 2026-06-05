@@ -189,7 +189,7 @@ export function renderCandlestickChart(container: HTMLElement, payload: Candlest
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("candlestick", "render_candlestick_chart", renderCandlestickChart);

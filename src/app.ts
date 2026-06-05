@@ -1,5 +1,5 @@
 import { App } from "@modelcontextprotocol/ext-apps";
-import { setAppInstance, storeLastToolCall, getLastToolCall, getAppInstance, getChartEntry, getTypeToToolMap, escapeHtml } from "./charts/shared.js";
+import { setAppInstance, storeLastToolCall, getLastToolCall, getAppInstance, getChartEntry, getTypeToToolMap, escapeHtml, setRefreshHandler } from "./charts/shared.js";
 import "./styles.css";
 
 // Side-effect imports: each chart file self-registers via registerChart()
@@ -47,7 +47,7 @@ root.innerHTML = `
 // autoResize disabled - we manually report size after each render to avoid
 // the fit-content measurement bug with CSS Grid + absolute canvases.
 const app = new App(
-  { name: "MCP Dashboards", version: "2.1.1" },
+  { name: "MCP Dashboards", version: "2.2.0" },
   {},
   { autoResize: false },
 );
@@ -130,8 +130,9 @@ app.ontoolresult = (result) => {
   renderFromData(data);
 };
 
-// Expose refresh handler for chart renderers
-(window as any).__mcpRefresh = async () => {
+// Register refresh handler via shared module reference (not window global) so
+// it isn't reachable to other scripts in the iframe via window.__mcpRefresh.
+setRefreshHandler(async () => {
   const last = getLastToolCall();
   const appInstance = getAppInstance();
   if (!last || !appInstance) return;
@@ -159,7 +160,7 @@ app.ontoolresult = (result) => {
   } catch (e) {
     console.warn("Refresh failed:", e);
   }
-};
+});
 
 // Standalone preview mode: if chart data is pre-injected (browser preview fallback),
 // render immediately without connecting to the MCP host.

@@ -153,7 +153,7 @@ export function renderTreemapChart(container: HTMLElement, payload: TreemapData)
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 
   const body = container.querySelector<HTMLElement>(".chart-card__body");
   if (body) addCanvasZoom(body, canvas, chartInstance);

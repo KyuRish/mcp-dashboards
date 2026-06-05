@@ -185,6 +185,18 @@ export function getLastToolCall(): { name: string; args: Record<string, unknown>
   return { name: _lastToolName, args: _lastToolArgs };
 }
 
+// Refresh handler registered by app.ts. Kept as a module-scoped reference
+// (not window.__mcpRefresh) so other scripts in the iframe can't reach it.
+let _refreshHandler: (() => void | Promise<void>) | null = null;
+
+export function setRefreshHandler(fn: (() => void | Promise<void>) | null): void {
+  _refreshHandler = fn;
+}
+
+export function triggerRefresh(): void {
+  void _refreshHandler?.();
+}
+
 // -- Chart Registry --
 // Each chart file self-registers via registerChart() as a side-effect import.
 // app.ts dispatches rendering and tool-name lookups through this registry.
@@ -306,6 +318,28 @@ export function escapeHtml(s: string): string {
   const div = document.createElement("div");
   div.textContent = s;
   return div.innerHTML;
+}
+
+/**
+ * Validate a user-provided color string before interpolation into a style
+ * attribute. Accepts: #RGB, #RRGGBB, #RRGGBBAA, rgb(...), rgba(...), and
+ * CSS var(--name) references. Anything else returns the fallback - prevents
+ * style-attribute breakout attacks like `red;background:url(...)` that could
+ * exfiltrate via CSS-loaded URLs.
+ */
+const _HEX = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const _RGB = /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d+)\s*)?\)$/;
+const _VAR = /^var\(--[a-z0-9_-]+\)$/i;
+export function sanitizeColor(input: unknown, fallback = "#888888"): string {
+  if (typeof input !== "string") return fallback;
+  const s = input.trim();
+  if (!s) return fallback;
+  if (_HEX.test(s) || _VAR.test(s)) return s;
+  if (_RGB.test(s)) {
+    const nums = s.match(/\d{1,3}/g) ?? [];
+    if (nums.slice(0, 3).every((n) => +n <= 255)) return s;
+  }
+  return fallback;
 }
 
 /** Parse hex color to [r, g, b] */
@@ -674,11 +708,10 @@ export function addHtmlExportButton(
   getOrCreateActions(header).appendChild(btn);
 }
 
-/** Add a refresh button to a chart card header. Hidden in standalone preview mode. */
-export function addRefreshButton(
-  container: HTMLElement,
-  onRefresh: () => void
-): void {
+/** Add a refresh button to a chart card header. Hidden in standalone preview
+ * mode. Triggers the refresh handler registered by app.ts via
+ * setRefreshHandler() - no longer reached via window.__mcpRefresh. */
+export function addRefreshButton(container: HTMLElement): void {
   // Standalone preview has no MCP host to re-invoke the tool against
   if (isStandaloneMode()) return;
 
@@ -692,7 +725,7 @@ export function addRefreshButton(
   btn.addEventListener("click", () => {
     btn.style.animation = "spin 0.6s linear";
     btn.addEventListener("animationend", () => { btn.style.animation = ""; }, { once: true });
-    onRefresh();
+    triggerRefresh();
   });
   getOrCreateActions(header).appendChild(btn);
 }

@@ -109,7 +109,7 @@ export function renderHeatmapChart(container: HTMLElement, payload: HeatmapData)
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 
   const body = container.querySelector<HTMLElement>(".chart-card__body");
   const heatmapEl = container.querySelector<HTMLElement>(".heatmap");

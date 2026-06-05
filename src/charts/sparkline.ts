@@ -95,7 +95,7 @@ export function renderSparklineChart(container: HTMLElement, payload: SparklineD
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("sparkline", "render_sparkline_chart", renderSparklineChart);

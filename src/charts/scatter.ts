@@ -230,7 +230,7 @@ export function renderScatterChart(container: HTMLElement, payload: ScatterData)
 
   deferResize(chartInstance);
   addHtmlExportButton(container, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("scatter", "render_scatter_chart", renderScatterChart);

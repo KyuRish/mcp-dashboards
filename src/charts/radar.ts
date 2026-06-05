@@ -141,7 +141,7 @@ export function renderRadarChart(container: HTMLElement, payload: RadarData): vo
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("radar", "render_radar_chart", renderRadarChart);

@@ -100,7 +100,7 @@ export function renderRadialCluster(container: HTMLElement, payload: RadialClust
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("radial_cluster", "render_radial_cluster", renderRadialCluster);

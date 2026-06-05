@@ -159,7 +159,7 @@ export function renderLineChart(container: HTMLElement, payload: LineData): void
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("line", "render_line_chart", renderLineChart);

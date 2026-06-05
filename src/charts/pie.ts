@@ -110,7 +110,7 @@ export function renderPieChart(container: HTMLElement, payload: PieData): void {
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("pie", "render_pie_chart", renderPieChart);

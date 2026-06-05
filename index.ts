@@ -21,7 +21,40 @@ async function startStreamableHTTPServer(
   const cors = await import("cors");
 
   const app = express.default();
-  app.use(cors.default());
+
+  // CORS: default to localhost-only to prevent drive-by attacks from any
+  // webpage the user happens to visit (a malicious site could otherwise POST
+  // to http://localhost:3001/mcp and invoke our tools - save_file etc.).
+  // Override with MCP_CORS_ALLOWED_ORIGINS=https://your-host.com,... for
+  // legitimate browser-based access from non-localhost origins.
+  const defaultOrigins = [
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
+  ];
+  const envOrigins = (process.env.MCP_CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const allowedOrigins = envOrigins.length > 0 ? envOrigins : defaultOrigins;
+
+  if (envOrigins.includes("*")) {
+    console.warn(
+      "[mcp-dashboards] WARNING: MCP_CORS_ALLOWED_ORIGINS contains '*' - allowing any origin. This is a serious security risk; only use for trusted environments.",
+    );
+  }
+
+  app.use(cors.default({
+    origin: (origin, cb) => {
+      // Same-origin requests / curl / non-browser callers have no Origin header
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+      cb(null, false);
+    },
+    credentials: false,
+    methods: ["GET", "POST", "OPTIONS"],
+  }));
   app.use(express.default.json());
 
   app.all("/mcp", async (req: Request, res: Response) => {

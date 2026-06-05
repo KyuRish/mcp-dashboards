@@ -123,7 +123,7 @@ export function renderTimelineChart(container: HTMLElement, payload: TimelineDat
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("timeline", "render_timeline_chart", renderTimelineChart);

@@ -260,7 +260,7 @@ export function renderBarChart(container: HTMLElement, payload: BarData): void {
   });
 
   addExportButton(container, proxy as any, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("bar", "render_bar_chart", renderBarChart);

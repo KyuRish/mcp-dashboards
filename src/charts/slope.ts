@@ -91,7 +91,7 @@ export function renderSlopeChart(container: HTMLElement, payload: SlopeData): vo
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("slope", "render_slope_chart", renderSlopeChart);

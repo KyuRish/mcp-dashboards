@@ -114,7 +114,7 @@ export function renderSankeyChart(container: HTMLElement, payload: SankeyData): 
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("sankey", "render_sankey_chart", renderSankeyChart);

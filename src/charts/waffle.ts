@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors } from "./shared.js";
+import { escapeHtml, sendClickMessage, addHtmlExportButton, addRefreshButton, registerChart, resolveColors, sanitizeColor } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 
 interface WaffleItem {
@@ -48,7 +48,7 @@ export function renderWaffleChart(container: HTMLElement, payload: WaffleData): 
   }
 
   const cellsHtml = cells.map((c, i) =>
-    `<div class="waffle__cell" style="background:${c.color}" title="${escapeHtml(c.label)}" data-idx="${i}"></div>`
+    `<div class="waffle__cell" style="background:${sanitizeColor(c.color)}" title="${escapeHtml(c.label)}" data-idx="${i}"></div>`
   ).join("");
 
   const legendHtml = payload.data.map((item, i) => {
@@ -56,7 +56,7 @@ export function renderWaffleChart(container: HTMLElement, payload: WaffleData): 
     const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : "0";
     return `
       <span class="waffle__legend-item">
-        <span class="waffle__legend-dot" style="background:${color}"></span>
+        <span class="waffle__legend-dot" style="background:${sanitizeColor(color)}"></span>
         ${escapeHtml(item.label)} (${pct}%)
       </span>
     `;
@@ -85,7 +85,7 @@ export function renderWaffleChart(container: HTMLElement, payload: WaffleData): 
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("waffle", "render_waffle_chart", renderWaffleChart);

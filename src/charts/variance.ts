@@ -74,7 +74,7 @@ export function renderVarianceChart(container: HTMLElement, payload: VarianceDat
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title);
-  addRefreshButton(card, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(card);
 }
 
 registerChart("variance", "render_variance_chart", renderVarianceChart);

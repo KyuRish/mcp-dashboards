@@ -95,7 +95,7 @@ export function renderWordCloudChart(container: HTMLElement, payload: WordCloudD
 
   deferResize(chartInstance);
   addExportButton(container, chartInstance, title);
-  addRefreshButton(container, () => (window as any).__mcpRefresh?.());
+  addRefreshButton(container);
 }
 
 registerChart("wordcloud", "render_wordcloud_chart", renderWordCloudChart);

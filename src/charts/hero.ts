@@ -1,4 +1,4 @@
-import { escapeHtml, sendClickMessage, addRefreshButton, getCSSVar, registerChart, addHtmlExportButton } from "./shared.js";
+import { escapeHtml, sendClickMessage, addRefreshButton, getCSSVar, registerChart, addHtmlExportButton, sanitizeColor } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 import { renderGem } from "./gem.js";
 
@@ -400,7 +400,7 @@ function renderThreshold(body: HTMLElement, p: HeroPayload): void {
     zonesHtml = p.zones.map((z) => {
       const left = (z.from / max) * 100;
       const width = ((z.to - z.from) / max) * 100;
-      return `<div class="hero-threshold__zone" style="left:${left}%;width:${width}%;background:${z.color}" title="${escapeHtml(z.label)}"></div>`;
+      return `<div class="hero-threshold__zone" style="left:${left}%;width:${width}%;background:${sanitizeColor(z.color)}" title="${escapeHtml(z.label)}"></div>`;
     }).join("");
   }
 
@@ -442,12 +442,12 @@ function renderBreakdown(body: HTMLElement, p: HeroPayload): void {
   body.innerHTML = `
     <div class="hero-breakdown">
       <div class="hero-breakdown__bar">
-        ${segments.map((s) => `<div class="hero-breakdown__seg" style="width:${s.pct}%;background:${s.color}" title="${escapeHtml(s.label)}: ${s.value}"></div>`).join("")}
+        ${segments.map((s) => `<div class="hero-breakdown__seg" style="width:${s.pct}%;background:${sanitizeColor(s.color)}" title="${escapeHtml(s.label)}: ${s.value}"></div>`).join("")}
       </div>
       <div class="hero-breakdown__legend">
         ${segments.map((s) => `
           <div class="hero-breakdown__item">
-            <span class="hero-breakdown__dot" style="background:${s.color}"></span>
+            <span class="hero-breakdown__dot" style="background:${sanitizeColor(s.color)}"></span>
             <span class="hero-breakdown__name">${escapeHtml(s.label)}</span>
             <span class="hero-breakdown__val">${s.pct.toFixed(0)}%</span>
           </div>
@@ -500,7 +500,7 @@ function renderOrb(body: HTMLElement, p: HeroPayload): void {
   const id = uid();
 
   body.innerHTML = `
-    <div class="hero-orb" style="--orb-color:${color}">
+    <div class="hero-orb" style="--orb-color:${sanitizeColor(color)}">
       <div class="hero-orb__wrap">
         <div class="hero-orb__aura"></div>
         <div class="hero-orb__sphere"></div>
@@ -597,9 +597,7 @@ export function renderHeroMetric(container: HTMLElement, payload: HeroPayload): 
 
   const card = container.querySelector<HTMLElement>(".chart-card")!;
   addHtmlExportButton(card, payload.title || "hero-metric");
-  addRefreshButton(card, () => {
-    (window as any).__mcpRefresh?.();
-  });
+  addRefreshButton(card);
 }
 
 registerChart("hero_metric", "render_hero_metric", renderHeroMetric);

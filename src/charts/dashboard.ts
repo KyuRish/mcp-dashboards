@@ -24,7 +24,7 @@ import { ChoroplethController, BubbleMapController, GeoFeature, ColorScale, Size
 import { feature } from "topojson-client";
 import worldAtlas from "world-atlas/countries-110m.json";
 import html2canvas from "html2canvas-pro";
-import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast, resolveShimmerForExport, addCanvasZoom, isStandaloneMode } from "./shared.js";
+import { getCSSVar, tooltipStyle, escapeHtml, deferResize, sendClickMessage, addExportButton, addHtmlExportButton, addRefreshButton, saveCanvasViaServer, resolveColors, registerChart, getChartEntry, showToast, resolveShimmerForExport, addCanvasZoom, isStandaloneMode, triggerRefresh } from "./shared.js";
 import { resolveTheme, applyTheme } from "../themes.js";
 import { renderHeroRing, renderHeroWidget } from "./hero.js";
 import { initBarDrilldown } from "./bar.js";
@@ -300,7 +300,7 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
     refreshBtn?.addEventListener("click", () => {
       refreshBtn.style.animation = "spin 0.6s linear";
       refreshBtn.addEventListener("animationend", () => { refreshBtn.style.animation = ""; }, { once: true });
-      (window as any).__mcpRefresh?.();
+      triggerRefresh();
     });
   }
 
@@ -395,7 +395,7 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
           const heroCard = heroWidgetEl.closest<HTMLElement>(".chart-card");
           if (heroCard) {
             addHtmlExportButton(heroCard, c.title ?? `Chart ${i + 1}`);
-            addRefreshButton(heroCard, () => (window as any).__mcpRefresh?.());
+            addRefreshButton(heroCard);
           }
         }
         return;
@@ -480,7 +480,10 @@ function buildKpiSparkSVG(data: number[], color: string): string {
 }
 
 function buildKpiCard(kpi: KPI, index: number): string {
-  const val = `${kpi.prefix ?? ""}${typeof kpi.value === "number" ? kpi.value.toLocaleString() : kpi.value}${kpi.suffix ?? ""}`;
+  // Escape every interpolation - kpi.value/prefix/suffix come from LLM-controlled
+  // inputs and land in innerHTML. kpi.label is already escaped at the call sites.
+  const rawVal = typeof kpi.value === "number" ? kpi.value.toLocaleString() : String(kpi.value);
+  const val = `${escapeHtml(kpi.prefix ?? "")}${escapeHtml(rawVal)}${escapeHtml(kpi.suffix ?? "")}`;
 
   let trendHtml = "";
   let sparkHtml = "";
@@ -530,6 +533,59 @@ function buildKpiCard(kpi: KPI, index: number): string {
 }
 
 function renderChartWidget(canvas: HTMLCanvasElement, chart: DashboardChart): void {
+  // Two shapes the LLM might pass for bar/line/radar/boxplot in a dashboard:
+  //
+  //   Shape A (object form, what these renderers natively want):
+  //     { data: { labels: [...], datasets: [...] } }
+  //   Shape B (flat array form, what pie/treemap/wordcloud use):
+  //     { data: [{label, value}, {label, value}, ...] }
+  //
+  // The standalone tools accept Shape A for bar/line/radar, but pie/treemap use
+  // Shape B - so LLMs naturally try Shape B for ALL dashboard charts. Without
+  // this coercion, Shape B silently rendered empty (axes 0-1, no bars). Both
+  // shapes are now normalised into top-level chart.labels + chart.datasets so
+  // the renderer below can read them uniformly.
+  //
+  // Pie/treemap/wordcloud are unaffected: they read chart.data directly, this
+  // block only writes to chart.labels / chart.datasets when they were empty.
+  const SERIES_TYPES = new Set(["bar", "line", "radar", "boxplot"]);
+  const d = chart.data as any;
+  const labelsEmpty = (chart.labels?.length ?? 0) === 0;
+  const datasetsEmpty = (chart.datasets?.length ?? 0) === 0;
+
+  if (d && typeof d === "object" && !Array.isArray(d)) {
+    // Shape A nested under chart.data - hoist to top level.
+    if (Array.isArray(d.labels) && labelsEmpty) {
+      chart.labels = d.labels;
+    }
+    if (Array.isArray(d.datasets) && datasetsEmpty) {
+      chart.datasets = d.datasets;
+    }
+  } else if (
+    Array.isArray(d) &&
+    SERIES_TYPES.has(chart.type) &&
+    labelsEmpty &&
+    datasetsEmpty &&
+    d.length > 0 &&
+    typeof d[0] === "object" &&
+    d[0] !== null &&
+    ("label" in d[0] || "value" in d[0])
+  ) {
+    // Shape B (pie-style) given to a series chart - convert to single-series
+    // labels + datasets. Single-series is the only thing this shape can carry,
+    // which matches what pie/treemap do naturally.
+    //
+    // Per-element pass-through (not all-or-nothing): each item is mapped
+    // independently. If x.value is missing, Number(undefined) is NaN and
+    // Chart.js draws no bar at that position - the row's axis label remains
+    // but the bar slot is visibly empty (not faked, not zero, not silent).
+    // The trigger above (Shape-B sniff on d[0]) is intentionally lenient -
+    // if d[0] has either field the whole array is converted, and individual
+    // broken rows degrade gracefully as just-described.
+    chart.labels = d.map((x: any) => String(x.label));
+    chart.datasets = [{ label: "", data: d.map((x: any) => Number(x.value)) }];
+  }
+
   if (chart.type === "pie") {
     const data = (chart.data ?? []) as Array<{ label: string; value: number }>;
     const palette = resolveColors(undefined, data.length);
