@@ -26,7 +26,7 @@ We use AI for everything - analysis, reports, strategy. But when it comes to act
 
 ## The solution
 
-MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 31 tools covering 44+ chart subtypes (bar has stacked/drilldown, hero has 11 variants, etc.), 21 themes, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
+MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 31 chart tools covering 44+ chart subtypes (bar has stacked/drilldown, hero has 11 variants, etc.), 21 themes, 5 visual discovery catalogs, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
 
 ## Quick Start
 
@@ -58,8 +58,10 @@ claude mcp add dashboard -- npx -y mcp-dashboards --stdio
 
 ```bash
 npx mcp-dashboards
-# Server starts on http://localhost:3001/mcp
+# Server starts on http://127.0.0.1:3001/mcp
 ```
+
+Bound to localhost by default. See [Configuration](#configuration) if you need to expose it on your network or allow browser access from a non-localhost origin.
 
 ### Supported clients
 
@@ -79,6 +81,8 @@ No API to learn. Describe what you want in plain English:
 
 The AI picks the right tool, formats your data, and renders the chart inline. Click any data point to ask follow-up questions.
 
+**Don't know where to start?** Ask *"show me the catalog"* — opens a master dashboard with tiles for every customization dimension (charts, themes, hero variants, typography, effects). Click any tile, hit Ask, and you'll drill into that sub-catalog.
+
 ## Interactive charts, not images
 
 Every chart is **interactive HTML** rendered directly in your conversation:
@@ -88,7 +92,7 @@ Every chart is **interactive HTML** rendered directly in your conversation:
 - **Export anywhere** - PPT (16:9 slides), A4 (paginated with smart page breaks), PNG, CSV
 
 <details>
-<summary><strong>All 31 Tools</strong></summary>
+<summary><strong>All Tools</strong></summary>
 
 | Tool | Type | Best For |
 |------|------|----------|
@@ -123,6 +127,17 @@ Every chart is **interactive HTML** rendered directly in your conversation:
 | `render_table` | Table | Data - sortable columns, striped rows, CSV export |
 | `render_from_json` | Auto-detect | Any JSON data - picks the best chart automatically |
 | `render_from_url` | URL fetch | Fetches JSON from a URL and auto-visualizes |
+
+**Discovery / Catalogs** — visual entry points for browsing what's available:
+
+| Tool | Shows | When to use |
+|------|-------|-------------|
+| `render_catalog` | Master catalog with 5 tiles | Don't know where to start. Click any tile, hit Ask, drill in. |
+| `render_chart_catalog` | All 31 chart types with mini previews | Looking for the right chart for your data |
+| `render_theme_catalog` | All 21 themes with color/typography/effects | Picking a theme |
+| `render_hero_catalog` | All 11 hero metric variants | Picking a KPI widget style |
+| `render_typography_catalog` | All 8 typography presets | Picking a font feel |
+| `render_effects_catalog` | All 5 effect presets | Picking an animation/glow style |
 
 </details>
 
@@ -210,17 +225,27 @@ Built on [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps). You a
 
 Why both: Claude Code (VS Code) strips `file://`, `vscode://`, and `command://` URL schemes from chat markdown, so only `http://` produces a working clickable link. The file:// path is provided for sharing and offline viewing. Tool annotations (`readOnlyHint`, `idempotentHint`, `openWorldHint`) help clients reason about tool behavior.
 
-## Storage and Cleanup
+## Configuration
 
-Chart HTML files are written to `<system temp>/mcp-dashboards/`. They persist for **7 days by default** and are then auto-deleted at next server startup. The chart's built-in download button (PNG / PPT / A4) is the recommended way to save anything permanently.
+All optional. Defaults are safe — set these only if you need to override.
 
-**Manual cleanup tools:**
-- Ask your AI to "list chart files" or "show me the chart files on disk" - invokes `list_chart_files`
-- Ask your AI to "delete all chart files" or "delete chart files older than 1 day" - invokes `delete_chart_files`
+| Env var | Default | What it does |
+|---------|---------|--------------|
+| `MCP_DASHBOARDS_RETAIN_DAYS` | `7` | How long to keep chart preview HTML files on disk. `0` disables auto-cleanup. |
+| `MCP_DASHBOARDS_DISABLE_PREVIEW` | unset | Kill switch — no HTML files written, no preview server started, no preview links. Inline rendering still works in MCP Apps clients. |
+| `MCP_HTTP_BIND_HOST` | `127.0.0.1` | HTTP-transport bind host. Stays on localhost by default. Set to `0.0.0.0` only if you trust your network. |
+| `MCP_CORS_ALLOWED_ORIGINS` | localhost only | Comma-separated origins allowed to call the HTTP endpoint from a browser. Set this to add a non-localhost origin (e.g. `https://your-app.com`). |
+| `MCP_URL_ALLOWLIST` | empty | Comma-separated hostnames that bypass the SSRF guard for `render_from_url` / `poll_http`. Use only for internal endpoints you fully trust. |
+| `MCP_OUTBOUND_RATE_PER_SEC` | `10` | Per-host throttle for outbound HTTP calls. |
+| `MCP_OUTBOUND_BURST` | `20` | How many initial requests can fire immediately before the rate kicks in. |
+| `POLL_PRESET_<NAME>_URL` | — | Server-side preset URL for live polling. See [Live Polling](#live-polling). |
+| `POLL_PRESET_<NAME>_HEADERS` | — | Auth headers (JSON object) for the matching preset URL. |
 
-**Env vars:**
-- `MCP_DASHBOARDS_RETAIN_DAYS=N` - change auto-cleanup window (default 7, set to 0 to disable auto-cleanup)
-- `MCP_DASHBOARDS_DISABLE_PREVIEW=1` - kill switch: do not write any HTML file to disk, do not start the preview server, do not emit preview links. Inline-rendering clients still work; non-MCP-Apps clients lose the browser fallback.
+### What's on disk
+
+Chart HTML files are written to `<system temp>/mcp-dashboards/` and auto-deleted after 7 days. The chart's built-in download button (PNG / PPT / A4) is the recommended way to save anything permanently.
+
+Ask your AI to *"list chart files"* or *"delete chart files older than 1 day"* anytime — invokes `list_chart_files` / `delete_chart_files`.
 
 **Requirements:** Node.js 18+.
 
@@ -247,7 +272,11 @@ If MCP Dashboards is useful to you:
 
 ## Privacy
 
-All processing happens locally. No data is collected, transmitted, or stored externally. External network calls are `render_from_url` and `poll_http` - both require you to explicitly provide the URL. Credentials in env var presets never leave your machine. The browser preview HTTP server binds only to `127.0.0.1` (localhost) and is not reachable from other devices. Chart preview HTML files are written to your system temp folder under `mcp-dashboards/` and auto-deleted after 7 days (configurable). Use `MCP_DASHBOARDS_DISABLE_PREVIEW=1` to disable both the preview server and file writes entirely.
+All processing happens locally. No data is collected, transmitted, or stored externally.
+
+External calls only happen when *you* explicitly ask — `render_from_url` and `poll_http` need a URL or preset you provide. Both refuse to fetch private, loopback, or link-local addresses (your `192.168.*` network, AWS metadata at `169.254.169.254`, etc.) so a prompt-injected AI can't quietly reach internal services. They also throttle per hostname so a runaway loop won't get your IP banned from a real API.
+
+Credentials in env var presets never leave your machine. The browser preview server and the optional HTTP transport both bind to `127.0.0.1` by default and are not reachable from other devices. Chart HTML files live in your system temp folder and auto-delete after 7 days. See [Configuration](#configuration) to change any of this.
 
 ## License
 
