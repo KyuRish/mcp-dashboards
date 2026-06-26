@@ -1056,3 +1056,4 @@ export function loadThemeFonts(typography: TypographySet): void {
   link.href = typography.googleFontsUrl;
   document.head.appendChild(link);
 }
+

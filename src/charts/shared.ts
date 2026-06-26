@@ -511,7 +511,7 @@ export function resolveShimmerForExport(container: HTMLElement): void {
   const scale = window.devicePixelRatio || 2;
 
   container.querySelectorAll<HTMLElement>(
-    ".shimmer-text, .fx-shimmer .header__brand, .fx-shimmer .chart-card__title.shimmer-text"
+    ".shimmer-text, .fx-shimmer .header__brand, .fx-shimmer .chart-card__title.shimmer-text, .ec-card.fx-shimmer .ec-card__name"
   ).forEach(el => {
     const text = el.textContent?.trim();
     if (!text) return;
@@ -676,6 +676,34 @@ export function addHtmlExportButton(
         `[${tag}],[${tag}] *,[${tag}] *::before,[${tag}] *::after{animation:none!important;transition:none!important;}`,
         `[${tag}].card,[${tag}] .card,[${tag}] .chart-wrapper{opacity:1!important;}`,
         `[${tag}].card::before,[${tag}] .card::before{display:none!important;}`,
+        // Effects catalog glass cards: backdrop-filter doesn't render in html2canvas
+        // -pro (GitHub issue #2406 on niklasvh/html2canvas). Previous workaround
+        // was a colored gradient bg, but that created visible rectangular outline
+        // against the dark dashboard (the contrast between colored card bg and
+        // neutral dashboard bg shows as a card-shaped edge regardless of border
+        // width). Fix: use the SAME neutral bg as non-glass cards (#161B22 =
+        // default --bg-card), killing the outline by construction. The glass
+        // character is supplied by the .ec-card__glass SVG (top-anchored radial
+        // highlight that fades to transparent at edges).
+        `[${tag}] .ec-card.fx-glass .ec-card__bg{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:#161B22!important;border-color:rgba(255,255,255,0.06)!important;}`,
+        // Reveal the glass-sheen SVG in export (invisible in live where the real
+        // backdrop-filter does the work).
+        `[${tag}] .ec-card__glass{opacity:1!important;}`,
+        // Halo is an inline SVG inside .ec-card__halo (emitted by effects-catalog
+        // .ts). html2canvas-pro serializes the SVG to a data URI and the browser
+        // rasterizes it natively, so no special export rendering is needed - we
+        // just force the wrapper opacity to 1 since the live state hides it.
+        `[${tag}] .ec-card__halo{opacity:1!important;}`,
+        // Particles animate from opacity 0 -> 0.85 -> 0; export freezes animations
+        // at frame 0 so all 5 land invisible. Pin them to fixed positions across
+        // the card height with full opacity so the static export shows them as
+        // a snapshot of "particles in flight".
+        `[${tag}] .ec-card__particles .ec-particle{animation:none!important;opacity:0.9!important;}`,
+        `[${tag}] .ec-card__particles .ec-particle:nth-child(1){bottom:auto!important;top:18%!important;}`,
+        `[${tag}] .ec-card__particles .ec-particle:nth-child(2){bottom:auto!important;top:42%!important;}`,
+        `[${tag}] .ec-card__particles .ec-particle:nth-child(3){bottom:auto!important;top:30%!important;}`,
+        `[${tag}] .ec-card__particles .ec-particle:nth-child(4){bottom:auto!important;top:65%!important;}`,
+        `[${tag}] .ec-card__particles .ec-particle:nth-child(5){bottom:auto!important;top:52%!important;}`,
       ].join("");
       document.head.appendChild(overrideStyle);
 

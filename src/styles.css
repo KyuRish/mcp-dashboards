@@ -862,6 +862,7 @@ body::before {
   text-shadow: 0 0 10px var(--glow-color);
 }
 
+
 /* -- Theme Effect: CRT Scanlines -- */
 .fx-scanlines::after {
   content: "";
@@ -1566,9 +1567,10 @@ body::before {
 
 .hero-orb__label {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-secondary, #cbd5e1);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  opacity: 0.9;
 }
 
 /* -- Hero: Gem -- */
@@ -1644,8 +1646,8 @@ body::before {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--accent, var(--text-secondary));
-  opacity: 0.85;
+  color: var(--accent, #93c5fd);
+  opacity: 1;
 }
 
 /* Pearl glow: softer, round clip */
@@ -2942,4 +2944,335 @@ body::before {
 .tc-card.fx-glass .tc-card__bg {
   background: var(--card-glass-bg, rgba(255, 255, 255, 0.05));
   backdrop-filter: blur(8px);
+}
+
+/* ========================================================================
+   Effects Catalog
+   Mirrors the Theme Catalog block above (.tc-card / .tc-card.fx-*). Same
+   pattern: a wrapper, a grid, and per-card fx-* rules scoped to the
+   card's __bg sub-element so production fx-* classes apply at the tile
+   level without leaking into other dashboard cards. Hardcoded color
+   fallbacks in var(--accent, ...) so the visuals are visible even when
+   no theme is applied.
+   ======================================================================== */
+
+.effects-catalog {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.effects-catalog__header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.effects-catalog__title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary, #e0e0e0);
+  margin: 0 0 4px;
+}
+
+.effects-catalog__subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted, #888);
+  display: block;
+}
+
+.effects-catalog__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 1000px) {
+  .effects-catalog__grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .effects-catalog__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.ec-card {
+  position: relative;        /* anchor for absolute-positioned __halo child */
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  /* NO isolation/stacking-context - halo paints behind __bg via DOM order,
+   * not z-index. html2canvas-pro can't render z-index:-1 inside an isolated
+   * stacking context (the working .hero-orb__aura uses the same DOM-order
+   * pattern with NO z-index, NO isolation parent - that's how export works).
+   * NO overflow:hidden - the __halo extends past the card on purpose, and
+   * box-shadow on __bg would also be eaten. NO :hover translate either -
+   * the lift IS the demo for fx-lift cards; a base hover lift would make
+   * every tile lift, including None (inert) and break the Subtle demo. */
+}
+
+.ec-card__bg {
+  background: var(--bg-card, #1a1f2e);
+  border: 1px solid var(--border, #2a3142);
+  border-radius: 10px;
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 160px;        /* down from 220 - None/Subtle don't need vertical
+                             * runway, and tall content like Neon still grows */
+  position: relative;       /* needed by scanlines ::after and particles */
+  overflow: hidden;         /* clip scanlines + rising particles to card box.
+                             * The parent .ec-card has no overflow:hidden so
+                             * box-shadow on __bg still extends outside. */
+}
+
+.ec-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.ec-card__name {
+  font-family: var(--font-heading, sans-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary, #e0e0e0);
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+}
+
+.ec-card__count {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary, #e0e0e0);
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.ec-card__features {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+.ec-card__feature {
+  font-family: var(--font-body, sans-serif);
+  font-size: 0.7rem;
+  color: var(--text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Per-card scoped effects --------------------------------------------
+ * Every effect renders fully inside the card. Class names mirror the
+ * production fx-* names but are scoped via the .ec-card prefix so they
+ * don't leak into real dashboards. Hardcoded color fallbacks in every
+ * var() so the effect is visible without a theme applied.
+ * ------------------------------------------------------------------------ */
+
+/* Title shimmer - matches the production .shimmer-text 5-stop wave so the
+ * catalog tile looks identical to how a real dashboard title shimmers. */
+.ec-card.fx-shimmer .ec-card__name {
+  background: linear-gradient(
+    90deg,
+    var(--text-primary, #e0e7ff) 0%,
+    var(--accent, #a78bfa) 25%,
+    var(--gradient-end, var(--accent, #f0abfc)) 50%,
+    var(--accent, #a78bfa) 75%,
+    var(--text-primary, #e0e7ff) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Glow border - soft single-color ring around the card */
+/* Halo via real DOM element with radial-gradient background. Replaces the
+ * previous box-shadow approach because html2canvas-pro renders box-shadow
+ * with artifacts (issue #89 closed as "not planned"). background-image
+ * (gradients) renders reliably - same technique the dashboard orb aura uses
+ * at dashboard.ts:1209. The __halo div extends 10px past the card on each
+ * side; its solid-bg __bg sibling covers the inner portion of the gradient,
+ * so what's visible is the outer ring of the radial fade - the actual glow. */
+/* The halo is invisible in live - it exists only as a fallback for export,
+ * where the [data-mcp-clone] override forces opacity:1 (because hover state
+ * doesn't survive html2canvas-pro screenshot). Live cards use the production
+ * box-shadow recipe below for hover glow.
+ *
+ * NO z-index. Paint order is DOM order: __halo is the first child of .ec-card
+ * (emitted before .ec-card__bg in effects-catalog.ts), so it paints first;
+ * .ec-card__bg paints over the center; the 10px outer ring of the halo
+ * remains visible. Same pattern .hero-orb__aura uses and the only one that
+ * html2canvas-pro reliably renders. */
+.ec-card__halo {
+  position: absolute;
+  inset: -14px;             /* extend further for visible glow band; halo
+                             * still fits inside grid gap of 14px so it won't
+                             * overlap neighbors */
+  border-radius: 20px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Glass sheen SVG - sibling-paint-order-first child of __bg. Sits inside the
+ * card, behind everything else. Invisible in live (where backdrop-filter does
+ * the actual glass work via the production .fx-glass rule); revealed in export
+ * via the [data-mcp-clone] override since backdrop-filter doesn't survive
+ * html2canvas-pro. The SVG fades to transparent at its corners by construction
+ * (stops use stop-opacity="0"), so the export shows soft top-sheen with no
+ * rectangular outline. */
+.ec-card__glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Hover glow on fx-glow / fx-neon cards. Mirrors the production .fx-glow .card
+ * :hover recipe (4-layer: subtle top highlight + close glow + deep spread)
+ * which the rest of the dashboard uses, so the catalog tile glow reads the
+ * same as a real themed dashboard would on hover. Multi-layer box-shadow is
+ * fine for live browsers; export is handled by the radial-gradient halo. */
+.ec-card.fx-glow .ec-card__bg,
+.ec-card.fx-neon .ec-card__bg {
+  transition: box-shadow 0.25s ease;
+}
+
+.ec-card.fx-glow:hover .ec-card__bg {
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 24px -2px rgba(129, 140, 248, 0.65),
+    0 16px 40px -8px rgba(129, 140, 248, 0.40);
+}
+
+.ec-card.fx-neon:hover .ec-card__bg {
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 0 30px -2px rgba(34, 211, 238, 0.80),
+    0 0 60px -8px rgba(34, 211, 238, 0.50);
+}
+
+/* Gradients use the default farthest-corner sizing so the 100% stop lands
+ * exactly at the halo div's corner, and the alpha decays gradually across
+ * all 6 stops down to fully transparent. No hard cut, no visible rectangular
+ * outline around the glow - the box edge is mathematically invisible. */
+/* No background here - the inline SVG inside .ec-card__halo IS the halo.
+ * html2canvas-pro renders the SVG natively via data-URI serialization, which
+ * sidesteps every CSS gradient/box-shadow quirk we've fought. The SVG has its
+ * own fill color picked by preset (cyan for neon, indigo for glow). */
+
+/* Crisp cyan edge on neon cards so the boundary reads as "this is neon",
+ * independent of how strong the halo gradient looks against the theme. */
+.ec-card.fx-neon .ec-card__bg {
+  border-color: var(--accent, rgba(34, 211, 238, 0.9));
+}
+
+/* Glass - tinted translucent panel with blur. Strong tint so the glass effect
+ * is visibly different from the default dark card even without a busy
+ * background behind it. */
+.ec-card.fx-glass .ec-card__bg {
+  background:
+    linear-gradient(135deg,
+      rgba(168, 139, 250, 0.22),
+      rgba(34, 211, 238, 0.22)
+    );
+  backdrop-filter: blur(14px) saturate(1.7);
+  -webkit-backdrop-filter: blur(14px) saturate(1.7);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Hover lift - stronger upward translate so subtle / energetic etc. have
+ * something to demonstrate when the cursor lands */
+.ec-card.fx-lift:hover {
+  transform: translateY(-6px);
+}
+
+/* Scanlines - CRT-style horizontal stripe pattern filling the card box.
+ * Scoped via position:absolute + parent overflow:hidden (already set on __bg
+ * above) so the pattern stops at the card edge - production uses position:
+ * fixed inset:0 with 3% opacity to cover the whole viewport unobtrusively;
+ * here we trade global for tile-local and bump the opacity so the lines
+ * are actually visible inside a small 200px catalog tile. */
+.ec-card.fx-scanlines .ec-card__bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.10) 0px,
+    rgba(255, 255, 255, 0.10) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 2;
+}
+
+/* Status pulse - small dot in the card head, animated via the existing
+ * @keyframes statusPulse keyframes defined elsewhere in this file. */
+.ec-card__pulse {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent, #22d3ee);
+  flex-shrink: 0;
+}
+.ec-card.fx-pulse .ec-card__pulse {
+  animation: statusPulse 1.5s ease infinite;
+  box-shadow: 0 0 0 0 var(--accent, #22d3ee);
+}
+
+/* Count-up - styling only; the actual 0->target counter is driven by a rAF
+ * loop in effects-catalog.ts (CSS counter()+@property animation has uneven
+ * browser support). The text gets a soft accent shadow so it reads as a
+ * "live counting" number. */
+.ec-card.fx-countup .ec-card__count {
+  color: var(--accent, #f97316);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent, #f97316) 40%, transparent);
+}
+
+/* Particles - 5 small dots rising within the card box. Animation height is
+ * tied to the card's content area (not 100vh) so the particles stay inside
+ * the tile. parent __bg has overflow:hidden (set above) so they appear/
+ * disappear cleanly at the top/bottom edges. */
+.ec-card__particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.ec-particle {
+  position: absolute;
+  bottom: -6px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--accent, #f472b6);
+  opacity: 0;
+  animation: ecParticleRise 4.5s linear infinite;
+}
+.ec-card__particles .ec-particle:nth-child(1) { left: 12%; animation-delay: 0s;   }
+.ec-card__particles .ec-particle:nth-child(2) { left: 30%; animation-delay: 0.9s; }
+.ec-card__particles .ec-particle:nth-child(3) { left: 50%; animation-delay: 1.8s; }
+.ec-card__particles .ec-particle:nth-child(4) { left: 70%; animation-delay: 2.7s; }
+.ec-card__particles .ec-particle:nth-child(5) { left: 88%; animation-delay: 3.6s; }
+
+@keyframes ecParticleRise {
+  0%   { transform: translateY(0);      opacity: 0; }
+  10%  { opacity: 0.85; }
+  90%  { opacity: 0.85; }
+  100% { transform: translateY(-220px); opacity: 0; }
 }

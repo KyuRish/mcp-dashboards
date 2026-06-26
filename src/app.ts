@@ -32,6 +32,7 @@ import "./charts/heatmap.js";
 import "./charts/timeline.js";
 import "./charts/geo.js";
 import "./charts/theme-catalog.js";
+import "./charts/effects-catalog.js";
 
 const root = document.getElementById("app")!;
 

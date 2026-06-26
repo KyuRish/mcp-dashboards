@@ -188,7 +188,7 @@ function buildGaugeSVG(
 
 export function renderHeroRing(
   container: HTMLElement,
-  data: { value: string | number; unit?: string; label?: string; progress?: number; color?: string; size?: "sm" | "md" | "lg" | "xl"; style?: "ring" | "gauge" },
+  data: { value: string | number; unit?: string; label?: string; progress?: number; color?: string; size?: "sm" | "md" | "lg" | "xl"; style?: "ring" | "gauge"; title?: string },
 ): void {
   const size = data.size || "md";
   const progress = data.progress ?? 0;
@@ -218,7 +218,11 @@ export function renderHeroRing(
 
   container.style.cursor = "pointer";
   container.addEventListener("click", () => {
-    sendClickMessage(`${data.label || "Metric"}: ${data.value}${data.unit ? " " + data.unit : ""}`);
+    // Prefer the card title (set by the dashboard renderer) so click+Ask
+    // routes to the named tool from a master catalog tile. Falls back to
+    // the label/Metric form when this widget is rendered standalone.
+    const target = data.title || data.label || "Metric";
+    sendClickMessage(`${target}: ${data.value}${data.unit ? " " + data.unit : ""}`);
   });
 }
 
@@ -233,9 +237,15 @@ function renderBigNumber(body: HTMLElement, p: HeroPayload): void {
   let sparkHtml = "";
   if (p.sparkline && p.sparkline.length > 0) {
     const max = Math.max(...p.sparkline);
+    // Per-card sparkline color: if the caller passed p.color, apply it
+    // inline so each card uses its own accent (effects catalog needs this
+    // so all 5 cards aren't identically blue). Falls back to the CSS rule
+    // var(--accent, #3B82F6) when no color is set.
+    const safeBarColor = sanitizeColor(p.color, "");
+    const colorStyle = safeBarColor ? `;background:${safeBarColor}` : "";
     const bars = p.sparkline.map((v) => {
       const h = max > 0 ? Math.max(4, (v / max) * 40) : 4;
-      return `<div class="hero-bn__bar" style="height:${h}px"></div>`;
+      return `<div class="hero-bn__bar" style="height:${h}px${colorStyle}"></div>`;
     }).join("");
     sparkHtml = `<div class="hero-bn__sparkline">${bars}</div>`;
   }

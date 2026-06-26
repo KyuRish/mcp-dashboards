@@ -817,29 +817,28 @@ export function createServer(): McpServer {
     },
     async (args: { theme?: string }): Promise<CallToolResult> => {
       const charts: Array<{ type: string; title: string; data?: unknown }> = [
-        { type: "hero", title: "variant=big_number", data: { variant: "big_number", value: 47200, unit: "$", label: "MRR", change: 12.4, changePeriod: "vs last month", sparkline: [38, 39, 41, 40, 42, 43, 45, 46, 47] }},
-        { type: "hero", title: "variant=progress_ring", data: { variant: "progress_ring", value: 87, unit: "%", label: "Q3 target", progress: 87 }},
-        { type: "hero", title: "variant=status", data: { variant: "status", label: "System health", statusLevel: "good", subsystems: [{ name: "API", status: "good" }, { name: "DB", status: "warn" }, { name: "Cache", status: "good" }], count: 1247 }},
-        { type: "hero", title: "variant=comparison", data: { variant: "comparison", before: 23.5, after: 41.2, improvement: "+75%", beforeLabel: "Last Q", afterLabel: "This Q" }},
-        { type: "hero", title: "variant=rank", data: { variant: "rank", rank: 3, total: 247, percentile: 99, rankChange: 5 }},
-        { type: "hero", title: "variant=countdown", data: { variant: "countdown", segments: [{ value: 7, label: "days" }, { value: 14, label: "hours" }, { value: 32, label: "min" }] }},
-        { type: "hero", title: "variant=threshold", data: { variant: "threshold", value: 78, max: 100, threshold: 80, unit: "%", zones: [{ label: "Safe", from: 0, to: 60, color: "#22c55e" }, { label: "Watch", from: 60, to: 80, color: "#eab308" }, { label: "Critical", from: 80, to: 100, color: "#ef4444" }] }},
-        { type: "hero", title: "variant=breakdown", data: { variant: "breakdown", items: [{ label: "Tech", value: 40, color: "#3b82f6" }, { label: "Sales", value: 30, color: "#22c55e" }, { label: "Ops", value: 20, color: "#eab308" }, { label: "Other", value: 10, color: "#94a3b8" }] }},
-        { type: "hero", title: "variant=nps", data: { variant: "nps", value: 67, max: 100, rating: "good" }},
-        { type: "hero", title: "variant=orb", data: { variant: "orb", value: 87, unit: "%", label: "Active users", color: "#3b82f6" }},
-        { type: "hero", title: "variant=gem", data: { variant: "gem", value: 1247, label: "Net worth", unit: "k", gemType: "diamond" }},
+        { type: "hero", title: "Big number", data: { variant: "big_number", value: 47200, unit: "$", label: "MRR", change: 12.4, changePeriod: "vs last month", sparkline: [38, 39, 41, 40, 42, 43, 45, 46, 47] }},
+        { type: "hero", title: "Progress ring", data: { variant: "progress_ring", value: 87, unit: "%", label: "Q3 target", progress: 87 }},
+        { type: "hero", title: "Status", data: { variant: "status", label: "System health", statusLevel: "good", subsystems: [{ name: "API", status: "good" }, { name: "DB", status: "warn" }, { name: "Cache", status: "good" }], count: 1247 }},
+        { type: "hero", title: "Comparison", data: { variant: "comparison", before: 23.5, after: 41.2, improvement: "+75%", beforeLabel: "Last Q", afterLabel: "This Q" }},
+        { type: "hero", title: "Rank", data: { variant: "rank", rank: 3, total: 247, percentile: 99, rankChange: 5 }},
+        { type: "hero", title: "Countdown", data: { variant: "countdown", segments: [{ value: 7, label: "days" }, { value: 14, label: "hours" }, { value: 32, label: "min" }] }},
+        { type: "hero", title: "Threshold", data: { variant: "threshold", value: 78, max: 100, threshold: 80, unit: "%", zones: [{ label: "Safe", from: 0, to: 60, color: "#22c55e" }, { label: "Watch", from: 60, to: 80, color: "#eab308" }, { label: "Critical", from: 80, to: 100, color: "#ef4444" }] }},
+        { type: "hero", title: "Breakdown", data: { variant: "breakdown", items: [{ label: "Tech", value: 40, color: "#3b82f6" }, { label: "Sales", value: 30, color: "#22c55e" }, { label: "Ops", value: 20, color: "#eab308" }, { label: "Other", value: 10, color: "#94a3b8" }] }},
+        { type: "hero", title: "NPS", data: { variant: "nps", value: 67, max: 100, rating: "good" }},
+        { type: "hero", title: "Orb", data: { variant: "orb", value: 87, unit: "%", label: "Active users", color: "#3b82f6" }},
+        { type: "hero", title: "Gem", data: { variant: "gem", value: 1247, label: "Net worth", unit: "k", gemType: "diamond" }},
       ];
       const chartData = {
         type: "dashboard" as const,
         title: "Hero Variant Catalog",
         kpis: [
           { label: "Variants", value: charts.length, suffix: " types" },
-          { label: "Tool", value: "render_hero_metric" },
         ],
         charts,
         columns: 3,
         theme: args.theme,
-        footer: { text: "Pass variant=<name> to render_hero_metric. Tip: gem variant has 8 sub-types (diamond, ruby, sapphire, emerald, golden_pearl, white_pearl, black_pearl, crystal)." },
+        footer: { text: "Tool: render_hero_metric - pass variant=<name>. Tip: gem has 8 sub-types (diamond, ruby, sapphire, emerald, golden_pearl, white_pearl, black_pearl, crystal)." },
       };
       return await _buildChartResult(server, chartData, `Hero Catalog: ${charts.length} variants of render_hero_metric. Click any card to ask about it.`);
     }
@@ -850,69 +849,17 @@ export function createServer(): McpServer {
     "render_effects_catalog",
     {
       title: "Effects Catalog",
-      description: "Show all 5 effect presets - none, subtle, shimmer, neon, energetic - as a dashboard. Use as effects=<name> on any chart to override theme defaults. Click any card to learn about that effect.",
-      inputSchema: { theme: ThemeParam },
+      description: "Show a visual catalog of all 5 effect presets - none, subtle, shimmer, neon, energetic. Each card previews the effect and lists the underlying treatments it bundles. Click any card to use that effect. For a master entry point covering all customization dimensions, see render_catalog.",
+      inputSchema: {},
       _meta: { ui: { resourceUri: RESOURCE_URI } },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
-    async (args: { theme?: string }): Promise<CallToolResult> => {
-      const charts = [
-        { type: "hero", title: "effects=none", data: { variant: "big_number", value: "Clean", label: "no animation, no glow" }},
-        { type: "hero", title: "effects=subtle", data: { variant: "big_number", value: "Soft", label: "gentle hover, light shadows" }},
-        { type: "hero", title: "effects=shimmer", data: { variant: "big_number", value: "Shimmer", label: "gradient title sweep" }},
-        { type: "hero", title: "effects=neon", data: { variant: "big_number", value: "Neon", label: "glow borders, vivid accent" }},
-        { type: "hero", title: "effects=energetic", data: { variant: "big_number", value: "Energetic", label: "bold motion, vibrant" }},
-      ];
-      const chartData = {
-        type: "dashboard" as const,
-        title: "Effects Catalog",
-        kpis: [
-          { label: "Presets", value: charts.length, suffix: " effects" },
-          { label: "Override", value: "effects=<name>" },
-        ],
-        charts,
-        columns: 3,
-        theme: args.theme,
-        footer: { text: "Effects override the theme's defaults. Mix-and-match with palette and typography for custom looks." },
-      };
-      return await _buildChartResult(server, chartData, `Effects Catalog: ${charts.length} presets - none, subtle, shimmer, neon, energetic. Pass effects=<name> on any chart to override theme defaults.`);
-    }
-  );
-
-  registerAppTool(
-    server,
-    "render_typography_catalog",
-    {
-      title: "Typography Catalog",
-      description: "Show all 8 typography presets - system, mono, professional, editorial, bold, techno, cyberpunk, luxury - with sample text. Use as typography=<name> on any chart to override theme defaults. Click any card to learn about that typeface.",
-      inputSchema: { theme: ThemeParam },
-      _meta: { ui: { resourceUri: RESOURCE_URI } },
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-    },
-    async (args: { theme?: string }): Promise<CallToolResult> => {
-      const charts = [
-        { type: "hero", title: "typography=system", data: { variant: "big_number", value: "Aa", label: "native system fonts - fastest load" }},
-        { type: "hero", title: "typography=mono", data: { variant: "big_number", value: "Aa", label: "monospaced - data dashboards" }},
-        { type: "hero", title: "typography=professional", data: { variant: "big_number", value: "Aa", label: "Inter / clean sans - corporate" }},
-        { type: "hero", title: "typography=editorial", data: { variant: "big_number", value: "Aa", label: "serif headlines - reports" }},
-        { type: "hero", title: "typography=bold", data: { variant: "big_number", value: "Aa", label: "heavy display - presentations" }},
-        { type: "hero", title: "typography=techno", data: { variant: "big_number", value: "Aa", label: "geometric - ops / engineering" }},
-        { type: "hero", title: "typography=cyberpunk", data: { variant: "big_number", value: "Aa", label: "stylised display - gaming / crypto" }},
-        { type: "hero", title: "typography=luxury", data: { variant: "big_number", value: "Aa", label: "elegant serif - wealth / fashion" }},
-      ];
-      const chartData = {
-        type: "dashboard" as const,
-        title: "Typography Catalog",
-        kpis: [
-          { label: "Presets", value: charts.length, suffix: " options" },
-          { label: "Override", value: "typography=<name>" },
-        ],
-        charts,
-        columns: 4,
-        theme: args.theme,
-        footer: { text: "Typography overrides the theme's defaults. Mix-and-match with palette and effects." },
-      };
-      return await _buildChartResult(server, chartData, `Typography Catalog: ${charts.length} font presets. Pass typography=<name> on any chart to override theme defaults.`);
+    async (): Promise<CallToolResult> => {
+      return await _buildChartResult(
+        server,
+        { type: "effects_catalog" },
+        "Effects Catalog: 5 effect previews with the bundled treatments labeled. Click any card to use it. Pass effects=<name> on any chart to override theme defaults."
+      );
     }
   );
 
@@ -921,22 +868,48 @@ export function createServer(): McpServer {
     "render_catalog",
     {
       title: "Master Catalog",
-      description: "Master entry point to discover everything mcp-dashboards can do. A single dashboard with one tile per customization dimension - charts, themes, hero variants, effects, typography. Click any tile then hit Ask, and the AI will route to the matching sub-catalog tool (render_chart_catalog, render_theme_catalog, render_hero_catalog, render_effects_catalog, render_typography_catalog).",
+      description: "Master entry point to discover everything mcp-dashboards can do. Each tile is a live visual preview of one customization dimension - a real bar chart for charts, a pie for themes, a progress ring for hero variants, a neon-glowing card for effects. Click any tile then hit Ask, and the AI will route to the matching sub-catalog tool (render_chart_catalog, render_theme_catalog, render_hero_catalog, render_effects_catalog).",
       inputSchema: { theme: ThemeParam },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     async (args: { theme?: string }): Promise<CallToolResult> => {
-      // Each tile is a hero card whose title is a directive to the AI on
-      // click - the chart card click handler in dashboard.ts puts the card
-      // title into the selection tray, so "render_chart_catalog (31 chart
-      // types)" lands in the tray and the model routes to the named tool.
-      const charts = [
-        { type: "hero", title: "render_chart_catalog (31 chart types)", data: { variant: "big_number", value: 31, unit: " types", label: "Charts - pie, bar, line, scatter, ..." }},
-        { type: "hero", title: "render_theme_catalog (21 presets)", data: { variant: "big_number", value: 21, unit: " themes", label: "Themes - boardroom, corporate, tokyo-midnight, ..." }},
-        { type: "hero", title: "render_hero_catalog (11 hero variants)", data: { variant: "big_number", value: 11, unit: " variants", label: "Hero metrics - big_number, ring, gem, orb, ..." }},
-        { type: "hero", title: "render_typography_catalog (8 fonts)", data: { variant: "big_number", value: 8, unit: " fonts", label: "Typography - system, mono, editorial, ..." }},
-        { type: "hero", title: "render_effects_catalog (5 effects)", data: { variant: "big_number", value: 5, unit: " effects", label: "Effects - none, subtle, shimmer, neon, energetic" }},
+      // Each tile is a real working chart - the card title carries the tool
+      // name so click + Ask routes the model to the matching sub-catalog,
+      // and the visual itself is what that catalog contains (variety of
+      // chart types, palette colors, a hero metric, an effect glow).
+      const charts: Array<{ type: string; title: string; data?: unknown; labels?: string[]; datasets?: Array<{ label: string; data: any[] }> }> = [
+        {
+          type: "bar",
+          title: "Charts",
+          labels: ["Pie", "Bar", "Line", "Radar", "Map", "Hero"],
+          datasets: [{ label: "Variety", data: [8, 14, 11, 6, 9, 12] }],
+        },
+        {
+          type: "pie",
+          title: "Themes",
+          data: [
+            { label: "Boardroom", value: 18 },
+            { label: "Tokyo-midnight", value: 16 },
+            { label: "Forest-amber", value: 14 },
+            { label: "Sky-ocean", value: 13 },
+            { label: "Office-red", value: 12 },
+            { label: "Black-matrix", value: 11 },
+            { label: "Zen-garden", value: 16 },
+          ],
+        },
+        {
+          type: "bar",
+          title: "Hero variants",
+          labels: ["Number", "Ring", "Status", "Compare", "Rank", "Count", "Bar", "NPS", "Orb", "Gem"],
+          datasets: [{ label: "Variants", data: [9, 12, 7, 10, 8, 6, 11, 9, 13, 10] }],
+        },
+        {
+          type: "bar",
+          title: "Effects",
+          labels: ["None", "Subtle", "Shimmer", "Neon", "Energetic"],
+          datasets: [{ label: "Presets", data: [4, 7, 11, 15, 13] }],
+        },
       ];
       const chartData = {
         type: "dashboard" as const,
@@ -946,11 +919,11 @@ export function createServer(): McpServer {
           { label: "Tip", value: "Click any tile, hit Ask" },
         ],
         charts,
-        columns: 3,
+        columns: 2,
         theme: args.theme,
-        footer: { text: "Click any tile then hit Ask - the AI will open the matching sub-catalog. Or call any of the render_*_catalog tools directly." },
+        footer: { text: "Each tile previews what its sub-catalog contains. Click any tile then hit Ask to open the matching catalog. Or call render_chart_catalog / render_theme_catalog / render_hero_catalog / render_effects_catalog directly." },
       };
-      return await _buildChartResult(server, chartData, `Master Catalog: ${charts.length} customization dimensions. Click any tile and hit Ask to open the matching sub-catalog (render_chart_catalog, render_theme_catalog, render_hero_catalog, render_typography_catalog, render_effects_catalog).`);
+      return await _buildChartResult(server, chartData, `Master Catalog: ${charts.length} customization dimensions, each shown as a live preview. Click any tile and hit Ask to open the matching sub-catalog (render_chart_catalog, render_theme_catalog, render_hero_catalog, render_effects_catalog).`);
     }
   );
 

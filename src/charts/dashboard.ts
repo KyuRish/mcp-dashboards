@@ -377,7 +377,13 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
       if (heroTypes.has(c.type)) {
         const heroWidgetEl = container.querySelector<HTMLElement>(`#dash-hero-widget-${i}`);
         if (heroWidgetEl) {
-          const heroData = (c.data ?? {}) as Record<string, unknown>;
+          const rawHeroData = (c.data ?? {}) as Record<string, unknown>;
+          // Thread the card title into the hero payload so its click handler
+          // can report `[Big Number] "<card title>"` instead of
+          // `[Big Number] "undefined"`. The hero variants read p.title from
+          // the payload; in standalone use the caller passes title directly,
+          // but inside a dashboard the title lives on the card, not the data.
+          const heroData = { ...rawHeroData, title: rawHeroData.title ?? c.title };
           if (heroData.variant && heroData.variant !== "progress_ring") {
             renderHeroWidget(heroWidgetEl, heroData);
           } else {
@@ -389,6 +395,7 @@ export function renderDashboard(container: HTMLElement, payload: DashboardData):
               color: heroData.color as string | undefined,
               size: (heroData.size as "sm" | "md" | "lg" | "xl") || "md",
               style: heroData.style as "ring" | "gauge" | undefined,
+              title: c.title,
             });
           }
           // Add export/refresh buttons to the hero chart-card

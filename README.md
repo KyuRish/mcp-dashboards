@@ -26,7 +26,7 @@ We use AI for everything - analysis, reports, strategy. But when it comes to act
 
 ## The solution
 
-MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 31 chart tools covering 44+ chart subtypes (bar has stacked/drilldown, hero has 11 variants, etc.), 21 themes, 5 visual discovery catalogs, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
+MCP Dashboards renders interactive charts, dashboards, and KPI widgets directly inside your AI conversation. 31 chart tools covering 44+ chart subtypes (bar has stacked/drilldown, hero has 11 variants, etc.), 21 themes, 4 visual discovery catalogs, live polling, PNG/PPT/A4 export - all from a single MCP server. No browser tabs, no copy-paste, no context switching.
 
 ## Quick Start
 
@@ -81,7 +81,7 @@ No API to learn. Describe what you want in plain English:
 
 The AI picks the right tool, formats your data, and renders the chart inline. Click any data point to ask follow-up questions.
 
-**Don't know where to start?** Ask *"show me the catalog"* — opens a master dashboard with tiles for every customization dimension (charts, themes, hero variants, typography, effects). Click any tile, hit Ask, and you'll drill into that sub-catalog.
+**Don't know where to start?** Ask *"show me the catalog"* — opens a master dashboard with one live visual tile per customization dimension (a real bar chart for charts, a pie for themes, a progress ring for hero variants, a neon-glowing card for effects). Click any tile, hit Ask, and you'll drill into that sub-catalog.
 
 ## Interactive charts, not images
 
@@ -132,12 +132,13 @@ Every chart is **interactive HTML** rendered directly in your conversation:
 
 | Tool | Shows | When to use |
 |------|-------|-------------|
-| `render_catalog` | Master catalog with 5 tiles | Don't know where to start. Click any tile, hit Ask, drill in. |
+| `render_catalog` | Master catalog with 4 live preview tiles | Don't know where to start. Click any tile, hit Ask, drill in. |
 | `render_chart_catalog` | All 31 chart types with mini previews | Looking for the right chart for your data |
 | `render_theme_catalog` | All 21 themes with color/typography/effects | Picking a theme |
 | `render_hero_catalog` | All 11 hero metric variants | Picking a KPI widget style |
-| `render_typography_catalog` | All 8 typography presets | Picking a font feel |
-| `render_effects_catalog` | All 5 effect presets | Picking an animation/glow style |
+| `render_effects_catalog` | All 5 effect presets, each applied to a real card | Picking an animation/glow style |
+
+Typography is still configurable on every chart via `typography=<name>` (8 options listed under [Themes](#themes)) — it just doesn't have its own catalog because all 8 options were visually identical without per-card font loading, which wasn't worth the build for one preview tool.
 
 </details>
 
